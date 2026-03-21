@@ -20,7 +20,7 @@ export default function Status() {
       }
       // api instance handles Authorization header automatically
       const response = await api.get("/potholes");
-      setPotholes(response.data);
+      setPotholes(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error("Error fetching potholes:", err);
       setError("Failed to load your pothole reports");

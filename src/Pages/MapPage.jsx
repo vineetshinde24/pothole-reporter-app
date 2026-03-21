@@ -65,7 +65,7 @@ export default function MapPage() {
   const fetchPotholes = async () => {
     try {
       const response = await api.get(`/potholes/nearby/${center[0]}/${center[1]}?radius=50000`);
-      setPotholes(response.data);
+      setPotholes(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error("Error fetching potholes:", err);
       setError("Failed to load potholes");
@@ -119,13 +119,16 @@ export default function MapPage() {
 
   const getStatusIcon = (status) => statusIcons[status] || statusIcons.reported;
 
-  const getStatusStats = () => ({
-    reported: potholes.filter(p => p.status === 'reported').length,
-    under_review: potholes.filter(p => p.status === 'under_review').length,
-    in_progress: potholes.filter(p => p.status === 'in_progress').length,
-    resolved: potholes.filter(p => p.status === 'resolved').length,
-    rejected: potholes.filter(p => p.status === 'rejected').length
-  });
+  const getStatusStats = () => {
+    if (!Array.isArray(potholes)) return { reported: 0, under_review: 0, in_progress: 0, resolved: 0, rejected: 0 };
+    return {
+      reported: potholes.filter(p => p.status === 'reported').length,
+      under_review: potholes.filter(p => p.status === 'under_review').length,
+      in_progress: potholes.filter(p => p.status === 'in_progress').length,
+      resolved: potholes.filter(p => p.status === 'resolved').length,
+      rejected: potholes.filter(p => p.status === 'rejected').length,
+    };
+  };
 
   const statusStats = getStatusStats();
 

@@ -34,8 +34,8 @@ export default function AdminDashboard() {
         api.get("/admin/potholes")
       ]);
       setStats(statsRes.data);
-      setUsers(usersRes.data);
-      setPotholes(potholesRes.data);
+      setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
+      setPotholes(Array.isArray(potholesRes.data) ? potholesRes.data : []);
       setSelectedPotholes(new Set());
     } catch (err) {
       console.error("Admin dashboard error:", err);
@@ -265,8 +265,9 @@ export default function AdminDashboard() {
             </button>
           </div>
         </div>
+        <p className="text-xs text-gray-400 mb-2 md:hidden">← Scroll to see more</p>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 text-xs md:text-sm">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-8">
@@ -305,7 +306,7 @@ export default function AdminDashboard() {
                     ) : <span className="text-gray-400 text-xs">N/A</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(pothole.status)}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${getStatusColor(pothole.status)}`}>
                       {getStatusText(pothole.status)}
                     </span>
                     {pothole.resolvedAt && (
@@ -331,8 +332,9 @@ export default function AdminDashboard() {
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-4">Users Management</h2>
+        <p className="text-xs text-gray-400 mb-2 md:hidden">← Scroll to see more</p>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 text-xs md:text-sm">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
