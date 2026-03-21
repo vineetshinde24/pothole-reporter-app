@@ -14,7 +14,12 @@ console.log('JWT_SECRET is properly configured');
 
 // CORS Configuration
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: [
+    'http://localhost:5173',  // dev
+    'http://localhost:4173',  // preview
+    'https://pothole-reporter-app.onrender.com',  // render (if needed)
+
+  ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -39,7 +44,7 @@ app.use('/potholes', require('./routes/potholes'));
 app.use('/admin', require('./routes/admin'));
 
 // Health check
-app.get('/', (req, res) => {
+app.get('/', (req, res) => {    
   res.send('Pothole Reporting Backend is running');
 })
 
