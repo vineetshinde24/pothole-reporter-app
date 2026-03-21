@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "../utils/api";
 import { useNavigate } from "react-router-dom";
 
 export default function AdminDashboard() {
@@ -17,19 +17,10 @@ export default function AdminDashboard() {
   const token = localStorage.getItem("authToken");
 
   useEffect(() => {
-    if (!token) {
-      navigate("/");
-      return;
-    }
-    
+    if (!token) { navigate("/"); return; }
     const payload = JSON.parse(atob(token.split('.')[1]));
     setCurrentUser(payload.user);
-    
-    if (payload.user.role !== 'admin') {
-      navigate("/map");
-      return;
-    }
-    
+    if (payload.user.role !== 'admin') { navigate("/map"); return; }
     fetchDashboardData();
   }, [navigate, token]);
 
@@ -37,19 +28,11 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       setError("");
-      
       const [statsRes, usersRes, potholesRes] = await Promise.all([
-        axios.get("http://localhost:3000/admin/stats", {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        axios.get("http://localhost:3000/admin/users", {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        axios.get("http://localhost:3000/admin/potholes", {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        api.get("/admin/stats"),
+        api.get("/admin/users"),
+        api.get("/admin/potholes")
       ]);
-
       setStats(statsRes.data);
       setUsers(usersRes.data);
       setPotholes(potholesRes.data);
@@ -62,12 +45,9 @@ export default function AdminDashboard() {
     }
   };
 
-  // USER MANAGEMENT FUNCTIONS
   const fetchUsers = async () => {
     try {
-      const response = await axios.get("http://localhost:3000/admin/users", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get("/admin/users");
       setUsers(response.data);
     } catch (err) {
       console.error("Error fetching users:", err);
@@ -77,9 +57,7 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get("http://localhost:3000/admin/stats", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get("/admin/stats");
       setStats(response.data);
     } catch (err) {
       console.error("Error fetching stats:", err);
@@ -88,11 +66,7 @@ export default function AdminDashboard() {
 
   const handlePromote = async (userId) => {
     try {
-      const response = await axios.patch(
-        `http://localhost:3000/admin/users/${userId}/promote`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await api.patch(`/admin/users/${userId}/promote`, {});
       alert(`✅ ${response.data.message}`);
       fetchUsers();
     } catch (err) {
@@ -103,11 +77,7 @@ export default function AdminDashboard() {
 
   const handleDemote = async (userId) => {
     try {
-      const response = await axios.patch(
-        `http://localhost:3000/admin/users/${userId}/demote`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await api.patch(`/admin/users/${userId}/demote`, {});
       alert(`✅ ${response.data.message}`);
       fetchUsers();
     } catch (err) {
@@ -121,16 +91,9 @@ export default function AdminDashboard() {
       alert('You cannot delete your own account!');
       return;
     }
-
-    if (!window.confirm(`🚨 PERMANENT DELETE\n\nAre you sure you want to delete user "${username}"?\n\nThis will:\n• Permanently delete the user account\n• Delete all their pothole reports\n• This action cannot be undone!`)) {
-      return;
-    }
-
+    if (!window.confirm(`🚨 PERMANENT DELETE\n\nAre you sure you want to delete user "${username}"?\n\nThis will:\n• Permanently delete the user account\n• Delete all their pothole reports\n• This action cannot be undone!`)) return;
     try {
-      const response = await axios.delete(`http://localhost:3000/admin/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
+      const response = await api.delete(`/admin/users/${userId}`);
       alert(`✅ ${response.data.message}\nDeleted ${response.data.deletedPotholesCount} pothole reports.`);
       fetchUsers();
       fetchStats();
@@ -140,16 +103,10 @@ export default function AdminDashboard() {
     }
   };
 
-  // ✅ POTHOLES MANAGEMENT FUNCTIONS
   const deletePothole = async (potholeId) => {
-    if (!window.confirm("Are you sure you want to delete this pothole report?")) {
-      return;
-    }
-
+    if (!window.confirm("Are you sure you want to delete this pothole report?")) return;
     try {
-      await axios.delete(`http://localhost:3000/admin/potholes/${potholeId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/admin/potholes/${potholeId}`);
       alert("✅ Pothole deleted successfully");
       fetchDashboardData();
     } catch (err) {
@@ -160,12 +117,10 @@ export default function AdminDashboard() {
 
   const updatePotholeStatus = async (potholeId, status, notes = "") => {
     try {
-      const response = await axios.patch(
-        `http://localhost:3000/admin/potholes/${potholeId}/status`,
-        { status, resolutionNotes: notes },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
+      const response = await api.patch(`/admin/potholes/${potholeId}/status`, {
+        status,
+        resolutionNotes: notes
+      });
       alert(`✅ Status updated to: ${status}`);
       fetchDashboardData();
     } catch (err) {
@@ -179,22 +134,13 @@ export default function AdminDashboard() {
       alert("Please select potholes and choose a status");
       return;
     }
-
-    if (!window.confirm(`Update ${selectedPotholes.size} potholes to "${bulkStatus}"?`)) {
-      return;
-    }
-
+    if (!window.confirm(`Update ${selectedPotholes.size} potholes to "${bulkStatus}"?`)) return;
     try {
-      const response = await axios.patch(
-        "http://localhost:3000/admin/potholes/bulk-status",
-        { 
-          potholeIds: Array.from(selectedPotholes),
-          status: bulkStatus,
-          resolutionNotes 
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
+      const response = await api.patch("/admin/potholes/bulk-status", {
+        potholeIds: Array.from(selectedPotholes),
+        status: bulkStatus,
+        resolutionNotes
+      });
       alert(`✅ ${response.data.message}`);
       setBulkStatus("");
       setResolutionNotes("");
@@ -208,20 +154,14 @@ export default function AdminDashboard() {
 
   const togglePotholeSelection = (potholeId) => {
     const newSelection = new Set(selectedPotholes);
-    if (newSelection.has(potholeId)) {
-      newSelection.delete(potholeId);
-    } else {
-      newSelection.add(potholeId);
-    }
+    if (newSelection.has(potholeId)) { newSelection.delete(potholeId); }
+    else { newSelection.add(potholeId); }
     setSelectedPotholes(newSelection);
   };
 
   const selectAllPotholes = () => {
-    if (selectedPotholes.size === potholes.length) {
-      setSelectedPotholes(new Set());
-    } else {
-      setSelectedPotholes(new Set(potholes.map(p => p._id)));
-    }
+    if (selectedPotholes.size === potholes.length) { setSelectedPotholes(new Set()); }
+    else { setSelectedPotholes(new Set(potholes.map(p => p._id))); }
   };
 
   const getStatusColor = (status) => {
@@ -237,22 +177,16 @@ export default function AdminDashboard() {
 
   const getStatusText = (status) => {
     const texts = {
-      reported: "Reported",
-      under_review: "Under Review",
-      in_progress: "In Progress",
-      resolved: "Resolved",
-      rejected: "Rejected"
+      reported: "Reported", under_review: "Under Review",
+      in_progress: "In Progress", resolved: "Resolved", rejected: "Rejected"
     };
     return texts[status] || status;
   };
 
-  if (loading) {
-    return <div className="flex justify-center items-center h-64">Loading...</div>;
-  }
+  if (loading) return <div className="flex justify-center items-center h-64">Loading...</div>;
 
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Admin Dashboard</h1>
         <p className="text-gray-600">Manage users, potholes, and system statistics</p>
@@ -264,7 +198,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Stats Section */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
@@ -286,7 +219,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ✅ Bulk Actions Section */}
       {selectedPotholes.size > 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <h3 className="font-semibold text-yellow-800 mb-3">
@@ -294,14 +226,8 @@ export default function AdminDashboard() {
           </h3>
           <div className="flex flex-wrap gap-4 items-end">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Update Status
-              </label>
-              <select
-                value={bulkStatus}
-                onChange={(e) => setBulkStatus(e.target.value)}
-                className="border rounded px-3 py-2"
-              >
+              <label className="block text-sm font-medium text-gray-700 mb-1">Update Status</label>
+              <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} className="border rounded px-3 py-2">
                 <option value="">Select Status</option>
                 <option value="under_review">Under Review</option>
                 <option value="in_progress">In Progress</option>
@@ -310,9 +236,7 @@ export default function AdminDashboard() {
               </select>
             </div>
             <div className="flex-1 min-w-64">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Resolution Notes (Optional)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Resolution Notes (Optional)</label>
               <input
                 type="text"
                 value={resolutionNotes}
@@ -321,48 +245,32 @@ export default function AdminDashboard() {
                 className="border rounded px-3 py-2 w-full"
               />
             </div>
-            <button
-              onClick={handleBulkStatusUpdate}
-              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-            >
+            <button onClick={handleBulkStatusUpdate} className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
               Apply to Selected
             </button>
-            <button
-              onClick={() => setSelectedPotholes(new Set())}
-              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-            >
+            <button onClick={() => setSelectedPotholes(new Set())} className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
               Clear Selection
             </button>
           </div>
         </div>
       )}
 
-      {/* ✅ Potholes Management */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-gray-800">Pothole Management</h2>
           <div className="flex items-center space-x-4">
             <span className="text-sm text-gray-500">{potholes.length} potholes</span>
-            <button
-              onClick={selectAllPotholes}
-              className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
-            >
+            <button onClick={selectAllPotholes} className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
               {selectedPotholes.size === potholes.length ? 'Deselect All' : 'Select All'}
             </button>
           </div>
         </div>
-        
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-8">
-                  <input
-                    type="checkbox"
-                    checked={selectedPotholes.size === potholes.length && potholes.length > 0}
-                    onChange={selectAllPotholes}
-                    className="rounded"
-                  />
+                  <input type="checkbox" checked={selectedPotholes.size === potholes.length && potholes.length > 0} onChange={selectAllPotholes} className="rounded" />
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Location</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Reported By</th>
@@ -376,12 +284,7 @@ export default function AdminDashboard() {
               {potholes.map((pothole) => (
                 <tr key={pothole._id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedPotholes.has(pothole._id)}
-                      onChange={() => togglePotholeSelection(pothole._id)}
-                      className="rounded"
-                    />
+                    <input type="checkbox" checked={selectedPotholes.has(pothole._id)} onChange={() => togglePotholeSelection(pothole._id)} className="rounded" />
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm">
@@ -389,69 +292,34 @@ export default function AdminDashboard() {
                       <div>Lng: {pothole.longitude?.toFixed(6)}</div>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    {pothole.reportedBy?.username || 'Unknown'}
-                  </td>
+                  <td className="px-4 py-3">{pothole.reportedBy?.username || 'Unknown'}</td>
                   <td className="px-4 py-3">
                     {pothole.ai_confidence ? (
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        pothole.ai_confidence > 0.8 
-                          ? 'bg-green-100 text-green-800 border border-green-200'
-                          : pothole.ai_confidence > 0.6
-                          ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                          : 'bg-red-100 text-red-800 border border-red-200'
+                        pothole.ai_confidence > 0.8 ? 'bg-green-100 text-green-800 border border-green-200'
+                        : pothole.ai_confidence > 0.6 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                        : 'bg-red-100 text-red-800 border border-red-200'
                       }`}>
                         {(pothole.ai_confidence * 100).toFixed(1)}%
                       </span>
-                    ) : (
-                      <span className="text-gray-400 text-xs">N/A</span>
-                    )}
+                    ) : <span className="text-gray-400 text-xs">N/A</span>}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(pothole.status)}`}>
                       {getStatusText(pothole.status)}
                     </span>
                     {pothole.resolvedAt && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        {new Date(pothole.resolvedAt).toLocaleDateString()}
-                      </div>
+                      <div className="text-xs text-gray-500 mt-1">{new Date(pothole.resolvedAt).toLocaleDateString()}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm">
-                    {new Date(pothole.createdAt).toLocaleDateString()}
-                  </td>
+                  <td className="px-4 py-3 text-sm">{new Date(pothole.createdAt).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
-                      <button
-                        onClick={() => updatePotholeStatus(pothole._id, 'under_review')}
-                        className="bg-yellow-500 text-white px-2 py-1 rounded text-xs hover:bg-yellow-600"
-                      >
-                        Review
-                      </button>
-                      <button
-                        onClick={() => updatePotholeStatus(pothole._id, 'in_progress')}
-                        className="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600"
-                      >
-                        In Progress
-                      </button>
-                      <button
-                        onClick={() => updatePotholeStatus(pothole._id, 'resolved', 'Fixed by maintenance team. Pin will be removed in a week.')}
-                        className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600"
-                      >
-                        Resolve
-                      </button>
-                      <button
-                        onClick={() => updatePotholeStatus(pothole._id, 'rejected', 'False positive')}
-                        className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600"
-                      >
-                        Reject
-                      </button>
-                      <button
-                        onClick={() => deletePothole(pothole._id)}
-                        className="bg-gray-500 text-white px-2 py-1 rounded text-xs hover:bg-gray-600"
-                      >
-                        Delete
-                      </button>
+                      <button onClick={() => updatePotholeStatus(pothole._id, 'under_review')} className="bg-yellow-500 text-white px-2 py-1 rounded text-xs hover:bg-yellow-600">Review</button>
+                      <button onClick={() => updatePotholeStatus(pothole._id, 'in_progress')} className="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600">In Progress</button>
+                      <button onClick={() => updatePotholeStatus(pothole._id, 'resolved', 'Fixed by maintenance team.')} className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600">Resolve</button>
+                      <button onClick={() => updatePotholeStatus(pothole._id, 'rejected', 'False positive')} className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">Reject</button>
+                      <button onClick={() => deletePothole(pothole._id)} className="bg-gray-500 text-white px-2 py-1 rounded text-xs hover:bg-gray-600">Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -461,7 +329,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ✅ Users Management */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-4">Users Management</h2>
         <div className="overflow-x-auto">
@@ -481,38 +348,18 @@ export default function AdminDashboard() {
                   <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{user.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded-full text-xs ${
-                      user.role === 'admin' 
-                        ? 'bg-purple-100 text-purple-800' 
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
+                    <span className={`px-2 py-1 rounded-full text-xs ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
                       {user.role}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">{new Date(user.createdAt).toLocaleDateString()}</td>
                   <td className="px-6 py-4 whitespace-nowrap space-x-2">
                     {user.role === 'user' ? (
-                      <button
-                        onClick={() => handlePromote(user._id)}
-                        className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600"
-                      >
-                        Promote
-                      </button>
+                      <button onClick={() => handlePromote(user._id)} className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">Promote</button>
                     ) : (
-                      <button
-                        onClick={() => handleDemote(user._id)}
-                        className="bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600"
-                      >
-                        Demote
-                      </button>
+                      <button onClick={() => handleDemote(user._id)} className="bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600">Demote</button>
                     )}
-                    <button
-                      onClick={() => handleDeleteUser(user._id, user.username)}
-                      className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
-                      disabled={user._id === currentUser?.id}
-                    >
+                    <button onClick={() => handleDeleteUser(user._id, user.username)} className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600" disabled={user._id === currentUser?.id}>
                       Delete
                     </button>
                   </td>

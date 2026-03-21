@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import axios from "axios";
+import api from "../utils/api";
 import * as exifr from "exifr";
 
 export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
@@ -39,7 +39,6 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
   const handleFile = async (file) => {
     if (!file) return;
 
-    // Check if file is an image
     if (!file.type.startsWith('image/')) {
       setError("Please upload an image file");
       return;
@@ -56,7 +55,6 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
         return;
       }
 
-      // Call location found first
       if (onLocationFound) {
         onLocationFound([gps.latitude, gps.longitude]);
       }
@@ -70,11 +68,9 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await axios.post("http://localhost:3000/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-          "Authorization": `Bearer ${token}`,
-        },
+      // api instance handles baseURL and Authorization header automatically
+      const response = await api.post("/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       if (response.data.message) {
@@ -88,7 +84,6 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
           onUploadSuccess();
         }
         
-        // Clear file input
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
@@ -114,7 +109,6 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
     <div className="space-y-4 p-4 border rounded-lg bg-white">
       <label className="block text-sm font-medium">Upload Pothole Photo</label>
       
-      {/* Drag and Drop Area */}
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
           isDragOver 
@@ -133,19 +127,16 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
             </svg>
           </div>
           
-          <div className="flex text-sm text-gray-600">
+          <div className="flex text-sm text-gray-600 justify-center">
             <span className="relative rounded-md font-medium text-blue-600 hover:text-blue-500">
               Click to upload
             </span>
             <p className="pl-1">or drag and drop</p>
           </div>
           
-          <p className="text-xs text-gray-500">
-            PNG, JPG, JPEG up to 10MB
-          </p>
+          <p className="text-xs text-gray-500">PNG, JPG, JPEG up to 10MB</p>
         </div>
         
-        {/* Hidden file input */}
         <input 
           ref={fileInputRef}
           type="file" 
@@ -156,7 +147,6 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
         />
       </div>
       
-      {/* Status Messages */}
       {loading && (
         <div className="flex items-center space-x-2 text-blue-600">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>

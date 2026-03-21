@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import api from '../utils/api'
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -15,81 +15,54 @@ const Register = () => {
   const navigate = useNavigate()
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
-
-    if (errors[e.target.name]) {
-      setErrors({
-        ...errors,
-        [e.target.name]: ''
-      })
-    }
+    setFormData({ ...formData, [e.target.name]: e.target.value })
+    if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: '' })
     if (serverError) setServerError('')
   }
 
   const validateForm = () => {
     const newErrors = {}
-    
     if (!formData.username.trim()) {
       newErrors.username = 'Username is required'
     } else if (formData.username.length < 3) {
       newErrors.username = 'Username must be at least 3 characters'
     }
-    
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required'
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email is invalid'
     }
-    
     if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters'
     }
-    
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match'
     }
-    
     return newErrors
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     const newErrors = validateForm()
-    
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return
     }
-    
     setLoading(true)
     setServerError('')
-    
     try {
-      console.log('Registering user:', { 
-        username: formData.username, 
-        email: formData.email 
-      })
-
-      // REAL API CALL to backend
-      const response = await axios.post('http://localhost:3000/auth/register', {
+      await api.post('/auth/register', {
         username: formData.username,
         email: formData.email,
         password: formData.password
       })
-
-      console.log('Registration successful:', response.data)
-      
       alert('✅ Account created successfully! Please login.')
       navigate('/login')
-      
     } catch (err) {
       console.error('Registration error:', err)
       setServerError(
-        err.response?.data?.message || 
-        err.response?.data?.errors?.[0]?.msg || 
+        err.response?.data?.message ||
+        err.response?.data?.errors?.[0]?.msg ||
         'Registration failed. Please try again.'
       )
     } finally {
@@ -113,13 +86,11 @@ const Register = () => {
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label htmlFor="username" className="form-label">
-              Username
-            </label>
+            <label htmlFor="username" className="form-label">Username</label>
             <input
               type="text"
               id="username"
-              name="username" 
+              name="username"
               value={formData.username}
               onChange={handleChange}
               className={`form-input ${errors.username ? 'error' : ''}`}
@@ -129,9 +100,7 @@ const Register = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="email" className="form-label">
-              Email Address
-            </label>
+            <label htmlFor="email" className="form-label">Email Address</label>
             <input
               type="email"
               id="email"
@@ -145,9 +114,7 @@ const Register = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="password" className="form-label">
-              Password
-            </label>
+            <label htmlFor="password" className="form-label">Password</label>
             <input
               type="password"
               id="password"
@@ -161,9 +128,7 @@ const Register = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="confirmPassword" className="form-label">
-              Confirm Password
-            </label>
+            <label htmlFor="confirmPassword" className="form-label">Confirm Password</label>
             <input
               type="password"
               id="confirmPassword"
@@ -176,35 +141,18 @@ const Register = () => {
             {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
           </div>
 
-          <button 
-            type="submit" 
-            className="btn btn-primary auth-btn"
-            disabled={loading}
-          >
+          <button type="submit" className="btn btn-primary auth-btn" disabled={loading}>
             {loading ? (
-              <>
-                <div className="loading-spinner small"></div>
-                Creating Account...
-              </>
-            ) : (
-              'Create Account'
-            )}
+              <><div className="loading-spinner small"></div>Creating Account...</>
+            ) : 'Create Account'}
           </button>
         </form>
 
         <div className="auth-footer">
           <p>
             Already have an account?{' '}
-            <Link to="/login" className="auth-link">
-              Sign in here
-            </Link>
+            <Link to="/login" className="auth-link">Sign in here</Link>
           </p>
-
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-            <p className="text-blue-700 text-sm">
-              <strong>Demo:</strong> Use any email and password (min. 6 characters)
-            </p>
-          </div>
         </div>
       </div>
     </div>

@@ -2,10 +2,9 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useState, useEffect } from "react";
 import PhotoUpload from "../Components/PhotoUpload";
-import axios from "axios";
+import api from "../utils/api";
 import L from "leaflet";
 
-// Fix for default markers
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -13,46 +12,33 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Different icons for different statuses
 const statusIcons = {
   reported: new L.Icon({
     iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM0Njg1ZjQiIHN0cm9rZT0iIzM2NmZmZiIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
   }),
   under_review: new L.Icon({
     iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNmZmQ4M2QiIHN0cm9rZT0iI2ZmYWI0MCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
   }),
   in_progress: new L.Icon({
     iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNmZjkwMDAiIHN0cm9rZT0iI2ZmNzMwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
   }),
   resolved: new L.Icon({
     iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMxMGExNTAiIHN0cm9rZT0iIzA4N2MzMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
   }),
   rejected: new L.Icon({
     iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNlMTExMTEiIHN0cm9rZT0iI2I5MWQxZCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
   })
 };
 
 function MapCenterUpdater({ center }) {
   const map = useMap();
   useEffect(() => {
-    if (center && center[0] && center[1]) {
-      map.setView(center, map.getZoom());
-    }
+    if (center && center[0] && center[1]) map.setView(center, map.getZoom());
   }, [center, map]);
   return null;
 }
@@ -67,23 +53,18 @@ export default function MapPage() {
   const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    // Get current user info from token
     const token = localStorage.getItem("authToken");
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setCurrentUser(payload.user);
-      } catch (err) {
-        console.error("Error decoding token:", err);
-      }
+      } catch (err) { console.error("Error decoding token:", err); }
     }
   }, []);
 
   const fetchPotholes = async () => {
     try {
-      const response = await axios.get(
-        `http://localhost:3000/potholes/nearby/${center[0]}/${center[1]}?radius=50000`
-      );
+      const response = await api.get(`/potholes/nearby/${center[0]}/${center[1]}?radius=50000`);
       setPotholes(response.data);
     } catch (err) {
       console.error("Error fetching potholes:", err);
@@ -96,10 +77,7 @@ export default function MapPage() {
   const fetchPotholeImage = async (potholeId) => {
     setImageLoading(true);
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await axios.get(`http://localhost:3000/potholes/${potholeId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get(`/potholes/${potholeId}`);
       setSelectedPothole(response.data);
     } catch (err) {
       console.error("Error fetching pothole image:", err);
@@ -109,9 +87,7 @@ export default function MapPage() {
     }
   };
 
-  useEffect(() => {
-    fetchPotholes();
-  }, [center]);
+  useEffect(() => { fetchPotholes(); }, [center]);
 
   const handlePhotoLocation = (coords) => {
     if (coords && coords.length === 2) {
@@ -120,9 +96,7 @@ export default function MapPage() {
     }
   };
 
-  const handleUploadSuccess = () => {
-    setTimeout(() => fetchPotholes(), 1000);
-  };
+  const handleUploadSuccess = () => setTimeout(() => fetchPotholes(), 1000);
 
   const getStatusColor = (status) => {
     const colors = {
@@ -137,29 +111,21 @@ export default function MapPage() {
 
   const getStatusText = (status) => {
     const texts = {
-      reported: "📝 Reported",
-      under_review: "🔍 Under Review",
-      in_progress: "🚧 In Progress",
-      resolved: "✅ Resolved",
-      rejected: "❌ Rejected"
+      reported: "📝 Reported", under_review: "🔍 Under Review",
+      in_progress: "🚧 In Progress", resolved: "✅ Resolved", rejected: "❌ Rejected"
     };
     return texts[status] || status;
   };
 
-  const getStatusIcon = (status) => {
-    return statusIcons[status] || statusIcons.reported;
-  };
+  const getStatusIcon = (status) => statusIcons[status] || statusIcons.reported;
 
-  const getStatusStats = () => {
-    const stats = {
-      reported: potholes.filter(p => p.status === 'reported').length,
-      under_review: potholes.filter(p => p.status === 'under_review').length,
-      in_progress: potholes.filter(p => p.status === 'in_progress').length,
-      resolved: potholes.filter(p => p.status === 'resolved').length,
-      rejected: potholes.filter(p => p.status === 'rejected').length
-    };
-    return stats;
-  };
+  const getStatusStats = () => ({
+    reported: potholes.filter(p => p.status === 'reported').length,
+    under_review: potholes.filter(p => p.status === 'under_review').length,
+    in_progress: potholes.filter(p => p.status === 'in_progress').length,
+    resolved: potholes.filter(p => p.status === 'resolved').length,
+    rejected: potholes.filter(p => p.status === 'rejected').length
+  });
 
   const statusStats = getStatusStats();
 
@@ -171,19 +137,11 @@ export default function MapPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-6">
-        <PhotoUpload 
-          onLocationFound={handlePhotoLocation} 
-          onUploadSuccess={handleUploadSuccess}
-        />
+        <PhotoUpload onLocationFound={handlePhotoLocation} onUploadSuccess={handleUploadSuccess} />
       </div>
 
-      {error && (
-        <div className="bg-red-50 p-4 rounded text-red-700">
-          {error}
-        </div>
-      )}
+      {error && <div className="bg-red-50 p-4 rounded text-red-700">{error}</div>}
 
-      {/* Status Overview */}
       <div className="bg-white rounded-lg shadow-md p-4">
         <h3 className="font-semibold mb-3 text-lg">Pothole Status Overview</h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
@@ -215,57 +173,30 @@ export default function MapPage() {
         <p className="text-gray-600">Total Potholes Reported</p>
       </div>
 
-      {/* Map Legend */}
       <div className="bg-white rounded-lg shadow-md p-4">
         <h4 className="font-semibold mb-2">Pin Color Indicators</h4>
         <div className="flex flex-wrap gap-4 text-sm">
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-            <span>Reported</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
-            <span>Under Review</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
-            <span>In Progress</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-            <span>Resolved</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-            <span>Rejected</span>
-          </div>
+          {[['blue', 'Reported'], ['yellow', 'Under Review'], ['orange', 'In Progress'], ['green', 'Resolved'], ['red', 'Rejected']].map(([color, label]) => (
+            <div key={color} className="flex items-center space-x-2">
+              <div className={`w-4 h-4 bg-${color}-500 rounded-full`}></div>
+              <span>{label}</span>
+            </div>
+          ))}
         </div>
       </div>
 
       <div className="h-[90vh] rounded-lg overflow-hidden shadow-lg border-2 border-gray-200">
         {loading ? (
-          <div className="h-full flex items-center justify-center">
-            <p>Loading potholes...</p>
-          </div>
+          <div className="h-full flex items-center justify-center"><p>Loading potholes...</p></div>
         ) : (
-          <MapContainer 
-            center={center} 
-            zoom={10} 
-            style={{ height: "100%", width: "100%" }}
-            scrollWheelZoom={true}
-          >
+          <MapContainer center={center} zoom={10} style={{ height: "100%", width: "100%" }} scrollWheelZoom={true}>
             <MapCenterUpdater center={center} />
-            <TileLayer 
+            <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             />
-            
             {potholes.map((pothole) => (
-              <Marker 
-                key={pothole._id} 
-                position={[pothole.latitude, pothole.longitude]}
-                icon={getStatusIcon(pothole.status)}
-              >
+              <Marker key={pothole._id} position={[pothole.latitude, pothole.longitude]} icon={getStatusIcon(pothole.status)}>
                 <Popup closeOnClick={false}>
                   <div className="text-center min-w-[220px]">
                     <div className="flex justify-between items-center mb-2">
@@ -274,38 +205,25 @@ export default function MapPage() {
                         {getStatusText(pothole.status)}
                       </span>
                     </div>
-                    
                     <div className="space-y-2 text-sm text-left">
                       <div>
                         <span className="text-gray-600">Location:</span>
-                        <div className="font-mono text-xs">
-                          {pothole.latitude.toFixed(6)}, {pothole.longitude.toFixed(6)}
-                        </div>
+                        <div className="font-mono text-xs">{pothole.latitude.toFixed(6)}, {pothole.longitude.toFixed(6)}</div>
                       </div>
-                      
                       <div className="flex justify-between">
                         <span className="text-gray-600">AI Confidence:</span>
-                        <span className="font-medium">
-                          {pothole.ai_confidence ? `${(pothole.ai_confidence * 100).toFixed(1)}%` : 'N/A'}
-                        </span>
+                        <span className="font-medium">{pothole.ai_confidence ? `${(pothole.ai_confidence * 100).toFixed(1)}%` : 'N/A'}</span>
                       </div>
-                      
                       <div className="flex justify-between">
                         <span className="text-gray-600">Reported by:</span>
-                        <span className="font-medium">
-                          {pothole.reportedBy?.username || 'Unknown'}
-                        </span>
+                        <span className="font-medium">{pothole.reportedBy?.username || 'Unknown'}</span>
                       </div>
-
                       {pothole.resolvedAt && (
                         <div className="flex justify-between">
                           <span className="text-gray-600">Resolved:</span>
-                          <span className="font-medium text-green-600 text-xs">
-                            {new Date(pothole.resolvedAt).toLocaleDateString()}
-                          </span>
+                          <span className="font-medium text-green-600 text-xs">{new Date(pothole.resolvedAt).toLocaleDateString()}</span>
                         </div>
                       )}
-
                       {pothole.resolutionNotes && (
                         <div className="mt-2 p-2 bg-gray-50 rounded border">
                           <span className="text-gray-600 text-xs block mb-1">Admin Notes:</span>
@@ -313,33 +231,22 @@ export default function MapPage() {
                         </div>
                       )}
                     </div>
-
-                      {currentUser && (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fetchPotholeImage(pothole._id);
-                          }}
-                          className="mt-3 w-full bg-blue-500 text-white py-1 rounded hover:bg-blue-600 text-sm"
-                        >
-                          Show Image
-                        </button>
-                      )}
-                    
+                    {currentUser && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); fetchPotholeImage(pothole._id); }}
+                        className="mt-3 w-full bg-blue-500 text-white py-1 rounded hover:bg-blue-600 text-sm"
+                      >
+                        Show Image
+                      </button>
+                    )}
                     {selectedPothole && selectedPothole._id === pothole._id && (
                       <div className="mt-3">
                         {imageLoading ? (
                           <p className="text-sm">Loading image...</p>
                         ) : selectedPothole.image ? (
                           <div className="space-y-2">
-                            <img 
-                              src={selectedPothole.image} 
-                              alt="Pothole" 
-                              className="w-full h-32 object-cover rounded border"
-                            />
-                            <p className="text-xs text-gray-500 text-center">
-                              Click outside to close
-                            </p>
+                            <img src={selectedPothole.image} alt="Pothole" className="w-full h-32 object-cover rounded border" />
+                            <p className="text-xs text-gray-500 text-center">Click outside to close</p>
                           </div>
                         ) : (
                           <p className="text-sm text-red-500">No image available</p>
