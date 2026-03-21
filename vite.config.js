@@ -36,9 +36,15 @@ export default defineConfig({
       }
     })
   ],
+  resolve: {
+    alias: {
+      '@': '/src'
+    }
+  },
   build: {
+    outDir: 'dist',
     rollupOptions: {
-      external: []
+      input: 'index.html'
     }
   },
   server: {
