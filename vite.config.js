@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  root: '.',
   plugins: [
     react(),
     VitePWA({
@@ -34,5 +35,15 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  build: {
+    rollupOptions: {
+      external: []
+    }
+  },
+  server: {
+    watch: {
+      ignored: ['**/pothole-backend/**', '**/node_modules/**']
+    }
+  }
 })
