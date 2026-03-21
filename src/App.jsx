@@ -1,12 +1,12 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import Login from './Pages/Login'
-import Register from './Pages/Register'
-import AdminDashboard from './Pages/AdminDashboard'
-import MapPage from './Pages/MapPage'
-import Status from './Pages/Status'
-import HomePage from './Pages/HomePage'
-import AboutPage from './Pages/AboutPage'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import AdminDashboard from './pages/AdminDashboard'
+import MapPage from './pages/MapPage'
+import Status from './pages/Status'
+import HomePage from './pages/HomePage'
+import AboutPage from './pages/AboutPage'
 
 function App() {
   const [user, setUser] = useState(null)

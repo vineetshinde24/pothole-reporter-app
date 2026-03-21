@@ -1,7 +1,7 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useState, useEffect } from "react";
-import PhotoUpload from "../Components/PhotoUpload";
+import PhotoUpload from "../components/PhotoUpload";
 import api from "../utils/api";
 import L from "leaflet";
 
