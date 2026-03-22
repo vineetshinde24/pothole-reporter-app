@@ -8,7 +8,6 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
   const [success, setSuccess] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [gpsSource, setGpsSource] = useState(null);
-  const [debug, setDebug] = useState("");
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -45,29 +44,25 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
     setLoading(true);
     setError("");
     setSuccess("");
-    setDebug("");
     setGpsSource(null);
 
     try {
       const token = localStorage.getItem("authToken");
       if (!token) { setError("Please log in first"); return; }
 
-      // Try EXIF GPS first
       let gps = null;
       try {
         gps = await exifr.gps(file);
       } catch (e) {
-        setDebug(`EXIF failed: ${e.message}`);
+        console.log("EXIF read failed, trying browser GPS");
       }
 
-      // Fallback to browser GPS
       if (!gps?.latitude || !gps?.longitude) {
         try {
           gps = await getBrowserLocation();
           setGpsSource('browser');
         } catch (locationErr) {
-          setError(`Location error: Code ${locationErr.code} - ${locationErr.message}`);
-          setDebug(`GPS fallback failed: ${locationErr.code} - ${locationErr.message}`);
+          setError("No GPS data found. Please enable location services in your browser/device settings.");
           return;
         }
       } else {
@@ -96,7 +91,6 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
 
     } catch (err) {
       console.error("Upload error:", err);
-      setDebug(`Upload error: ${err.response?.status} - ${JSON.stringify(err.response?.data)}`);
       if (err.response?.data?.verified === false) {
         setError(`❌ ${err.response.data.message} (Confidence: ${(err.response.data.confidence * 100).toFixed(1)}%)`);
       } else {
@@ -161,7 +155,6 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
         />
       </div>
 
-      {/* GPS source indicator */}
       {gpsSource === 'browser' && (
         <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
           📍 Location from your device GPS
@@ -170,13 +163,6 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
       {gpsSource === 'exif' && (
         <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
           📍 Location from photo metadata
-        </div>
-      )}
-
-      {/* Debug info - remove after testing */}
-      {debug && (
-        <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded border">
-          🐛 Debug: {debug}
         </div>
       )}
 
