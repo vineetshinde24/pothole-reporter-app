@@ -7,6 +7,7 @@ import MapPage from './pages/MapPage'
 import Status from './pages/Status'
 import HomePage from './pages/HomePage'
 import AboutPage from './pages/AboutPage'
+import Navbar from './Components/Navbar'
 
 function App() {
   const [user, setUser] = useState(null)
