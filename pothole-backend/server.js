@@ -18,7 +18,7 @@ app.use(cors({
     'http://localhost:5173',  // dev
     'http://localhost:4173',  // preview
     'https://pothole-reporter-app.onrender.com',  // render 
-    'https://pothole-reporter-app-beta.vercel.app/' // vercel 
+    'https://pothole-reporter-app-beta.vercel.app' // vercel 
 
   ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
