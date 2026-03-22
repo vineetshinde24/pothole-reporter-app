@@ -6,7 +6,6 @@ export default function Navbar({ user, onLogout }) {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Close menu on route change
   useEffect(() => {
     setMenuOpen(false);
   }, [location]);
@@ -25,34 +24,32 @@ export default function Navbar({ user, onLogout }) {
 
   return (
     <nav className="bg-blue-600 text-white shadow-lg">
-      <div className="container mx-auto px-4">
+      <div className="px-4">
         <div className="flex justify-between items-center h-14">
-          
-          {/* Logo - now on one line */}
-          <Link to="/" className="text-lg font-bold hover:text-blue-200 whitespace-nowrap">
-            🕳️ Pothole Reporter
+
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-2 font-bold text-base hover:text-blue-200 shrink-0">
+            <img src="/pothole.png" alt="logo" className="h-8 w-8" />
+            <span className="hidden sm:inline">Pothole Grievance Reporter</span>
+            <span className="sm:hidden">Pothole App</span>
           </Link>
 
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden md:flex items-center gap-4 text-sm">
             {user ? (
               <>
                 <Link to="/about" className="hover:text-blue-200 transition-colors">About</Link>
                 <Link to="/map" className="hover:text-blue-200 transition-colors">Map</Link>
                 <Link to="/status" className="hover:text-blue-200 transition-colors">Status</Link>
                 {(user.role === 'admin' || user.role === 'Admin') && (
-                  <Link to="/admin" className="hover:text-blue-200 bg-yellow-500 px-3 py-1 rounded transition-colors">
+                  <Link to="/admin" className="bg-yellow-500 hover:bg-yellow-400 px-3 py-1 rounded transition-colors">
                     Admin
                   </Link>
                 )}
-                <div className="flex items-center space-x-3 border-l border-blue-400 pl-4">
-                  <span className="text-sm">
-                    {user.username || user.name || user.email || 'User'}
-                    <span className="ml-1 text-xs bg-blue-500 px-2 py-1 rounded capitalize">
-                      {user.role || 'user'}
-                    </span>
-                  </span>
-                  <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm transition-colors">
+                <div className="flex items-center gap-2 border-l border-blue-400 pl-4">
+                  <span className="font-medium">{user.username || user.name || user.email || 'User'}</span>
+                  <span className="text-xs bg-blue-800 px-2 py-1 rounded capitalize">{user.role || 'user'}</span>
+                  <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded transition-colors ml-1">
                     Logout
                   </button>
                 </div>
@@ -65,28 +62,28 @@ export default function Navbar({ user, onLogout }) {
             )}
           </div>
 
-          {/* Mobile Hamburger Button */}
+          {/* Mobile Hamburger */}
           <button
-            className="md:hidden flex flex-col justify-center items-center w-8 h-8 space-y-1.5"
+            className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5"
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label="Toggle menu"
           >
-            <span className={`block w-6 h-0.5 bg-white transition-transform duration-300 ${menuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
-            <span className={`block w-6 h-0.5 bg-white transition-opacity duration-300 ${menuOpen ? 'opacity-0' : ''}`}></span>
-            <span className={`block w-6 h-0.5 bg-white transition-transform duration-300 ${menuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
+            <span className={`block w-6 h-0.5 bg-white transition-all duration-300 ${menuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
+            <span className={`block w-6 h-0.5 bg-white transition-all duration-300 ${menuOpen ? 'opacity-0' : ''}`}></span>
+            <span className={`block w-6 h-0.5 bg-white transition-all duration-300 ${menuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
           </button>
         </div>
       </div>
 
-      {/* Mobile Dropdown Menu */}
+      {/* Mobile Menu */}
       {menuOpen && (
-        <div className="md:hidden bg-blue-700 px-4 pb-4 space-y-2">
+        <div className="md:hidden bg-blue-700 px-4 pb-4 space-y-1">
           {user ? (
             <>
-              {/* User info */}
-              <div className="py-2 border-b border-blue-500 text-sm">
-                Logged in as <strong>{user.username || user.email}</strong>
-                <span className="ml-2 text-xs bg-blue-500 px-2 py-0.5 rounded capitalize">{user.role || 'user'}</span>
+              <div className="py-3 border-b border-blue-500 flex items-center gap-2 text-sm">
+                <span>👤</span>
+                <strong>{user.username || user.email}</strong>
+                <span className="text-xs bg-blue-500 px-2 py-0.5 rounded capitalize">{user.role || 'user'}</span>
               </div>
               <Link to="/about" className="block py-2 hover:text-blue-200 transition-colors">About</Link>
               <Link to="/map" className="block py-2 hover:text-blue-200 transition-colors">Map</Link>

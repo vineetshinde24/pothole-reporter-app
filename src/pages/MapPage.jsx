@@ -145,29 +145,26 @@ export default function MapPage() {
 
       {error && <div className="bg-red-50 p-4 rounded text-red-700">{error}</div>}
 
-      <div className="bg-white rounded-lg shadow-md p-4">
-        <h3 className="font-semibold mb-3 text-lg">Pothole Status Overview</h3>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
-          <div className="p-3 rounded-lg border-2 border-blue-200 bg-blue-50">
-            <p className="text-xl font-bold text-blue-600">{statusStats.reported}</p>
-            <p className="text-xs text-blue-800">Reported</p>
-          </div>
-          <div className="p-3 rounded-lg border-2 border-yellow-200 bg-yellow-50">
-            <p className="text-xl font-bold text-yellow-600">{statusStats.under_review}</p>
-            <p className="text-xs text-yellow-800">Under Review</p>
-          </div>
-          <div className="p-3 rounded-lg border-2 border-orange-200 bg-orange-50">
-            <p className="text-xl font-bold text-orange-600">{statusStats.in_progress}</p>
-            <p className="text-xs text-orange-800">In Progress</p>
-          </div>
-          <div className="p-3 rounded-lg border-2 border-green-200 bg-green-50">
-            <p className="text-xl font-bold text-green-600">{statusStats.resolved}</p>
-            <p className="text-xs text-green-800">Resolved</p>
-          </div>
-          <div className="p-3 rounded-lg border-2 border-red-200 bg-red-50">
-            <p className="text-xl font-bold text-red-600">{statusStats.rejected}</p>
-            <p className="text-xs text-red-800">Rejected</p>
-          </div>
+      <div className="flex flex-wrap justify-center gap-3 text-center">
+        <div className="p-3 rounded-lg border-2 border-blue-200 bg-blue-50 flex-1 min-w-[120px] max-w-[200px]">
+          <p className="text-xl font-bold text-blue-600">{statusStats.reported}</p>
+          <p className="text-xs text-blue-800">Reported</p>
+        </div>
+        <div className="p-3 rounded-lg border-2 border-yellow-200 bg-yellow-50 flex-1 min-w-[120px] max-w-[200px]">
+          <p className="text-xl font-bold text-yellow-600">{statusStats.under_review}</p>
+          <p className="text-xs text-yellow-800">Under Review</p>
+        </div>
+        <div className="p-3 rounded-lg border-2 border-orange-200 bg-orange-50 flex-1 min-w-[120px] max-w-[200px]">
+          <p className="text-xl font-bold text-orange-600">{statusStats.in_progress}</p>
+          <p className="text-xs text-orange-800">In Progress</p>
+        </div>
+        <div className="p-3 rounded-lg border-2 border-green-200 bg-green-50 flex-1 min-w-[120px] max-w-[200px]">
+          <p className="text-xl font-bold text-green-600">{statusStats.resolved}</p>
+          <p className="text-xs text-green-800">Resolved</p>
+        </div>
+        <div className="p-3 rounded-lg border-2 border-red-200 bg-red-50 flex-1 min-w-[120px] max-w-[200px]">
+          <p className="text-xl font-bold text-red-600">{statusStats.rejected}</p>
+          <p className="text-xs text-red-800">Rejected</p>
         </div>
       </div>
 
@@ -188,7 +185,7 @@ export default function MapPage() {
         </div>
       </div>
 
-      <div className="h-[90vh] rounded-lg overflow-hidden shadow-lg border-2 border-gray-200">
+      <div className="h-[90vh] rounded-lg overflow-hidden shadow-lg border-2 border-gray-200 mx-5 mb-4">
         {loading ? (
           <div className="h-full flex items-center justify-center"><p>Loading potholes...</p></div>
         ) : (
