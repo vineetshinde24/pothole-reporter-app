@@ -18,12 +18,22 @@ router.get('/users', requireAdmin, async (req, res) => {
 // Get all potholes with details (admin only)
 router.get('/potholes', requireAdmin, async (req, res) => {
   try {
-    const potholes = await PotholeImage.find()
-      .populate('reportedBy', 'username email')
-      .sort({ createdAt: -1 });
+    // FIX: Use try/catch around populate separately so we can fall back
+    // if reportedBy ref is missing or schema doesn't have it defined.
+    let potholes;
+    try {
+      potholes = await PotholeImage.find()
+        .populate('reportedBy', 'username email')
+        .sort({ createdAt: -1 });
+    } catch (populateErr) {
+      console.error('Populate failed, falling back to raw query:', populateErr.message);
+      // Fallback: return potholes without populated user data
+      potholes = await PotholeImage.find().sort({ createdAt: -1 });
+    }
     res.json(potholes);
   } catch (err) {
-    res.status(500).json({ message: 'Error fetching potholes' });
+    console.error('Error fetching potholes:', err);
+    res.status(500).json({ message: 'Error fetching potholes', detail: err.message });
   }
 });
 
@@ -48,11 +58,11 @@ router.patch('/users/:id/promote', requireAdmin, async (req, res) => {
       { role: 'admin' },
       { new: true }
     ).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     res.json({ message: 'User promoted to admin', user });
   } catch (err) {
     res.status(500).json({ message: 'Error promoting user' });
@@ -67,11 +77,11 @@ router.patch('/users/:id/demote', requireAdmin, async (req, res) => {
       { role: 'user' },
       { new: true }
     ).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     res.json({ message: 'Admin demoted to user', user });
   } catch (err) {
     res.status(500).json({ message: 'Error demoting user' });
@@ -85,13 +95,16 @@ router.get('/stats', requireAdmin, async (req, res) => {
     const totalAdmins = await User.countDocuments({ role: 'admin' });
     const totalPotholes = await PotholeImage.countDocuments();
     const verifiedPotholes = await PotholeImage.countDocuments({ ai_verified: true });
-    
+
     res.json({
       totalUsers,
       totalAdmins,
       totalPotholes,
       verifiedPotholes,
-      verificationRate: totalPotholes > 0 ? (verifiedPotholes / totalPotholes * 100).toFixed(1) : 0
+      verificationRate:
+        totalPotholes > 0
+          ? ((verifiedPotholes / totalPotholes) * 100).toFixed(1)
+          : 0,
     });
   } catch (err) {
     res.status(500).json({ message: 'Error fetching stats' });
@@ -102,25 +115,23 @@ router.get('/stats', requireAdmin, async (req, res) => {
 router.delete('/users/:id', requireAdmin, async (req, res) => {
   try {
     const userId = req.params.id;
-    
-    // Prevent admin from deleting themselves
+
     if (userId === req.user.id) {
       return res.status(400).json({ message: 'Cannot delete your own account' });
     }
 
-    // HARD DELETE: Completely remove user and their potholes
     const [deletedUser, deletedPotholes] = await Promise.all([
-      User.findByIdAndDelete(userId), // Permanently delete user
-      PotholeImage.deleteMany({ reportedBy: userId }) // Permanently delete their potholes
+      User.findByIdAndDelete(userId),
+      PotholeImage.deleteMany({ reportedBy: userId }),
     ]);
 
     if (!deletedUser) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({ 
+    res.json({
       message: 'User and their potholes permanently deleted',
-      deletedPotholesCount: deletedPotholes.deletedCount
+      deletedPotholesCount: deletedPotholes.deletedCount,
     });
   } catch (err) {
     console.error('Error deleting user:', err);
@@ -128,17 +139,49 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// Update pothole status
+// FIX: bulk-status MUST come before /:id/status
+// Otherwise Express matches 'bulk-status' as the :id parameter and
+// tries to find a pothole with id="bulk-status", which crashes.
+router.patch('/potholes/bulk-status', requireAdmin, async (req, res) => {
+  try {
+    const { potholeIds, status, resolutionNotes } = req.body;
+
+    const updateData = {
+      status,
+      resolvedAt: status === 'resolved' ? new Date() : null,
+      resolvedBy: req.user.id,
+    };
+
+    if (resolutionNotes) {
+      updateData.resolutionNotes = resolutionNotes;
+    }
+
+    const result = await PotholeImage.updateMany(
+      { _id: { $in: potholeIds } },
+      updateData
+    );
+
+    res.json({
+      message: `Updated ${result.modifiedCount} potholes to ${status}`,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (err) {
+    console.error('Error bulk updating pothole status:', err);
+    res.status(500).json({ message: 'Error updating potholes status' });
+  }
+});
+
+// Update pothole status — keep AFTER bulk-status
 router.patch('/potholes/:id/status', requireAdmin, async (req, res) => {
   try {
     const { status, resolutionNotes } = req.body;
-    
-    const updateData = { 
+
+    const updateData = {
       status,
       resolvedAt: status === 'resolved' ? new Date() : null,
-      resolvedBy: req.user.id
+      resolvedBy: req.user.id,
     };
-    
+
     if (resolutionNotes) {
       updateData.resolutionNotes = resolutionNotes;
     }
@@ -153,43 +196,13 @@ router.patch('/potholes/:id/status', requireAdmin, async (req, res) => {
       return res.status(404).json({ message: 'Pothole not found' });
     }
 
-    res.json({ 
+    res.json({
       message: `Pothole status updated to ${status}`,
-      pothole 
+      pothole,
     });
   } catch (err) {
     console.error('Error updating pothole status:', err);
     res.status(500).json({ message: 'Error updating pothole status' });
-  }
-});
-
-// Bulk update status for multiple potholes
-router.patch('/potholes/bulk-status', requireAdmin, async (req, res) => {
-  try {
-    const { potholeIds, status, resolutionNotes } = req.body;
-    
-    const updateData = { 
-      status,
-      resolvedAt: status === 'resolved' ? new Date() : null,
-      resolvedBy: req.user.id
-    };
-    
-    if (resolutionNotes) {
-      updateData.resolutionNotes = resolutionNotes;
-    }
-
-    const result = await PotholeImage.updateMany(
-      { _id: { $in: potholeIds } },
-      updateData
-    );
-
-    res.json({ 
-      message: `Updated ${result.modifiedCount} potholes to ${status}`,
-      modifiedCount: result.modifiedCount
-    });
-  } catch (err) {
-    console.error('Error bulk updating pothole status:', err);
-    res.status(500).json({ message: 'Error updating potholes status' });
   }
 });
 
