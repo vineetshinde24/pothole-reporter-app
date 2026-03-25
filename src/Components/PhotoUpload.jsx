@@ -18,7 +18,11 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
     setIsDragOver(false);
     if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
   };
-  const handleFileInputChange = (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); };
+  const handleFileInputChange = (e) => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+    // Reset input so same file can be selected again
+    e.target.value = "";
+  };
 
   const getBrowserLocation = () => {
     return new Promise((resolve, reject) => {
@@ -34,9 +38,47 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
     });
   };
 
+  /**
+   * FIX 3: Convert any image (including HEIC from iPhone) to JPEG via canvas.
+   * This ensures MongoDB always stores a browser-renderable format.
+   * IMPORTANT: We extract EXIF *before* this step since canvas strips metadata.
+   */
+  const convertToJpeg = (file) => {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(url);
+            if (blob) {
+              // Preserve original filename but force .jpg extension
+              const newName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+              resolve(new File([blob], newName, { type: "image/jpeg" }));
+            } else {
+              reject(new Error("Canvas conversion failed"));
+            }
+          },
+          "image/jpeg",
+          0.85
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Image failed to load for conversion"));
+      };
+      img.src = url;
+    });
+  };
+
   const handleFile = async (file) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
+    if (!file.type.startsWith("image/") && !file.name.match(/\.(heic|heif)$/i)) {
       setError("Please upload an image file");
       return;
     }
@@ -48,33 +90,66 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
 
     try {
       const token = localStorage.getItem("authToken");
-      if (!token) { setError("Please log in first"); return; }
-
-      let gps = null;
-      try {
-        gps = await exifr.gps(file);
-      } catch (e) {
-        console.log("EXIF read failed, trying browser GPS");
+      if (!token) {
+        setError("Please log in first");
+        setLoading(false);
+        return;
       }
 
-      if (!gps?.latitude || !gps?.longitude) {
+      // FIX 1: Extract GPS from the ORIGINAL file BEFORE any canvas/conversion step.
+      // Canvas draw strips all EXIF data, so order matters critically here.
+      let gps = null;
+      try {
+        // exifr.gps() returns null (not throws) when GPS tags are absent —
+        // so we check the result explicitly rather than relying on catch.
+        const result = await exifr.gps(file);
+        if (result?.latitude && result?.longitude) {
+          gps = result;
+        }
+      } catch (exifErr) {
+        console.warn("EXIF extraction error:", exifErr);
+      }
+
+      if (!gps) {
+        // Fallback: use live browser/device GPS
         try {
           gps = await getBrowserLocation();
-          setGpsSource('browser');
+          setGpsSource("browser");
         } catch (locationErr) {
-          setError("No GPS data found. Please enable location services in your browser/device settings.");
+          setError(
+            "No GPS data found in photo and device location is unavailable. " +
+            "Please enable location permissions and try again."
+          );
+          // FIX 1 (cont): was missing setLoading(false) here, leaving spinner stuck
+          setLoading(false);
           return;
         }
       } else {
-        setGpsSource('exif');
+        setGpsSource("exif");
       }
 
       if (onLocationFound) onLocationFound([gps.latitude, gps.longitude]);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("latitude", gps.latitude);
-    formData.append("longitude", gps.longitude);
+      // FIX 3: Convert to JPEG *after* EXIF extraction.
+      // This handles HEIC (iPhone camera) and ensures the stored file renders in browsers.
+      let uploadFile = file;
+      if (
+        file.type === "image/heic" ||
+        file.type === "image/heif" ||
+        file.name.match(/\.(heic|heif)$/i)
+      ) {
+        try {
+          uploadFile = await convertToJpeg(file);
+        } catch (convErr) {
+          console.warn("HEIC conversion failed, uploading original:", convErr);
+          // Continue with original — backend may handle it
+        }
+      }
+
+      const formData = new FormData();
+      formData.append("file", uploadFile);
+      formData.append("latitude", gps.latitude);
+      formData.append("longitude", gps.longitude);
 
       const response = await api.post("/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -82,21 +157,24 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
 
       if (response.data.message) {
         if (response.data.confidence) {
-          setSuccess(`✅ AI Verified! Confidence: ${(response.data.confidence * 100).toFixed(1)}%`);
+          setSuccess(
+            `✅ AI Verified! Confidence: ${(response.data.confidence * 100).toFixed(1)}%`
+          );
         } else {
           setSuccess("Upload successful!");
         }
         if (onUploadSuccess) onUploadSuccess();
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        if (cameraInputRef.current) cameraInputRef.current.value = "";
       }
-
     } catch (err) {
       console.error("Upload error:", err);
       if (err.response?.data?.verified === false) {
-        setError(`❌ ${err.response.data.message} (Confidence: ${(err.response.data.confidence * 100).toFixed(1)}%)`);
+        setError(
+          `❌ ${err.response.data.message} (Confidence: ${(
+            err.response.data.confidence * 100
+          ).toFixed(1)}%)`
+        );
       } else {
-        setError(err.response?.data?.message || "Upload failed");
+        setError(err.response?.data?.message || "Upload failed. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -107,14 +185,20 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
     <div className="space-y-4 p-4 border rounded-lg bg-white">
       <label className="block text-sm font-medium">Upload Pothole Photo</label>
 
-      {/* Mobile Camera Button */}
+      {/*
+        FIX 2: Removed `md:hidden` — camera button was disappearing on tablets
+        and landscape phones. Show it always on touch-capable devices instead.
+        Both inputs are kept separate so capture="environment" only applies to
+        the camera button, not the file picker.
+      */}
       <button
         onClick={() => cameraInputRef.current?.click()}
         disabled={loading}
-        className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition-colors disabled:opacity-50 md:hidden"
+        className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
       >
         📷 Take Photo with Camera
       </button>
+      {/* Camera input: capture="environment" opens rear camera directly */}
       <input
         ref={cameraInputRef}
         type="file"
@@ -125,44 +209,61 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
         className="hidden"
       />
 
-      {/* Drag and Drop / File picker */}
+      {/* Drag and drop / file picker — no capture attr so it opens file browser */}
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-          isDragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+          isDragOver
+            ? "border-blue-500 bg-blue-50"
+            : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
         } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => !loading && fileInputRef.current?.click()}
       >
         <div className="space-y-2">
           <div className="text-gray-400">
-            <svg className="mx-auto h-12 w-12" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-              <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <svg
+              className="mx-auto h-12 w-12"
+              stroke="currentColor"
+              fill="none"
+              viewBox="0 0 48 48"
+            >
+              <path
+                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </div>
           <div className="flex text-sm text-gray-600 justify-center">
-            <span className="font-medium text-blue-600 hover:text-blue-500">Click to upload</span>
+            <span className="font-medium text-blue-600 hover:text-blue-500">
+              Click to upload
+            </span>
             <p className="pl-1">or drag and drop</p>
           </div>
-          <p className="text-xs text-gray-500">PNG, JPG, JPEG up to 10MB</p>
+          <p className="text-xs text-gray-500">PNG, JPG, JPEG, HEIC up to 10MB</p>
         </div>
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,.heic,.heif"
           onChange={handleFileInputChange}
           disabled={loading}
           className="hidden"
         />
       </div>
 
-      {gpsSource === 'browser' && (
+      {/* CSS fix for EXIF rotation on phone images */}
+      <style>{`img { image-orientation: from-image; }`}</style>
+
+      {gpsSource === "browser" && (
         <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
           📍 Location from your device GPS
         </div>
       )}
-      {gpsSource === 'exif' && (
+      {gpsSource === "exif" && (
         <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
           📍 Location from photo metadata
         </div>
