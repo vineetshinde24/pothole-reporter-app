@@ -1,16 +1,26 @@
 const express = require('express');
-const { getAllPotholes, getPotholeById, getNearbyPotholes } = require('../controllers/potholeController');
+const {
+  getAllPotholes,
+  getAllPotholesMap,
+  getPotholeById,
+  getNearbyPotholes,
+} = require('../controllers/potholeController');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all potholes 
+// All potholes for map — public, no auth needed, capped at 500
+// IMPORTANT: this must be defined before /:id so Express doesn't treat
+// the string "all" as a MongoDB ObjectId and throw a CastError
+router.get('/all', getAllPotholesMap);
+
+// Get all potholes for current logged-in user (Status page)
 router.get('/', authenticateToken, getAllPotholes);
 
-// Get specific pothole with image
-router.get('/:id', authenticateToken, getPotholeById);
+// Get nearby potholes — public, used after upload to refresh local area
+router.get('/nearby/:lat/:lng', getNearbyPotholes);
 
-// Get nearby potholes (public - for map display)
-router.get('/nearby/:lat/:lng', getNearbyPotholes); // No authentication needed
+// Get specific pothole with image (authenticated — image is sensitive)
+router.get('/:id', authenticateToken, getPotholeById);
 
 module.exports = router;

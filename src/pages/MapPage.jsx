@@ -1,88 +1,53 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { useState, useEffect } from "react";
-import PhotoUpload from "../Components/PhotoUpload";
+import { useState, useEffect, useCallback } from "react";
+import PhotoUpload from "../components/PhotoUpload";
 import api from "../utils/api";
 import L from "leaflet";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconUrl:       'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl:     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
 const statusIcons = {
-  reported: new L.Icon({
-    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM0Njg1ZjQiIHN0cm9rZT0iIzM2NmZmZiIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
-  }),
-  under_review: new L.Icon({
-    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNmZmQ4M2QiIHN0cm9rZT0iI2ZmYWI0MCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
-  }),
-  in_progress: new L.Icon({
-    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNmZjkwMDAiIHN0cm9rZT0iI2ZmNzMwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
-  }),
-  resolved: new L.Icon({
-    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMxMGExNTAiIHN0cm9rZT0iIzA4N2MzMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
-  }),
-  rejected: new L.Icon({
-    iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNlMTExMTEiIHN0cm9rZT0iI2I5MWQxZCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
-  }),
+  reported:     new L.Icon({ iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM0Njg1ZjQiIHN0cm9rZT0iIzM2NmZmZiIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+', iconSize: [25,41], iconAnchor: [12,41], popupAnchor: [1,-34] }),
+  under_review: new L.Icon({ iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNmZmQ4M2QiIHN0cm9rZT0iI2ZmYWI0MCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+', iconSize: [25,41], iconAnchor: [12,41], popupAnchor: [1,-34] }),
+  in_progress:  new L.Icon({ iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNmZjkwMDAiIHN0cm9rZT0iI2ZmNzMwMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+', iconSize: [25,41], iconAnchor: [12,41], popupAnchor: [1,-34] }),
+  resolved:     new L.Icon({ iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMxMGExNTAiIHN0cm9rZT0iIzA4N2MzMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+', iconSize: [25,41], iconAnchor: [12,41], popupAnchor: [1,-34] }),
+  rejected:     new L.Icon({ iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNlMTExMTEiIHN0cm9rZT0iI2I5MWQxZCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+', iconSize: [25,41], iconAnchor: [12,41], popupAnchor: [1,-34] }),
 };
 
 function MapCenterUpdater({ center }) {
   const map = useMap();
   useEffect(() => {
-    if (center && center[0] && center[1]) map.setView(center, map.getZoom());
+    if (center?.[0] && center?.[1]) map.setView(center, map.getZoom());
   }, [center, map]);
   return null;
 }
 
-/**
- * FIX: Convert whatever the backend sends for `image` into a usable <img> src.
- *
- * MongoDB stores the image as Binary. When Mongoose serialises it to JSON it
- * comes across as one of three shapes:
- *   1. Already a base64 data-URL string  →  use as-is
- *   2. A plain base64 string (no prefix) →  add the data: prefix
- *   3. A Buffer-like object { type:'Buffer', data:[...] }
- *      →  convert the byte array to base64 ourselves
- *
- * Without this conversion `<img src={rawBinary}>` renders a broken image.
- */
 const toImageSrc = (image, contentType = 'image/jpeg') => {
   if (!image) return null;
-
-  // Already a usable data-URL or http URL
   if (typeof image === 'string') {
     if (image.startsWith('data:') || image.startsWith('http')) return image;
-    // Plain base64 string — add the prefix
     return `data:${contentType};base64,${image}`;
   }
-
-  // Buffer object from JSON: { type: 'Buffer', data: [255, 216, ...] }
   if (image?.type === 'Buffer' && Array.isArray(image.data)) {
     const bytes = new Uint8Array(image.data);
     let binary = '';
     bytes.forEach(b => { binary += String.fromCharCode(b); });
-    const base64 = btoa(binary);
-    return `data:${contentType};base64,${base64}`;
+    return `data:${contentType};base64,${btoa(binary)}`;
   }
-
   return null;
 };
 
 export default function MapPage() {
-  const [potholes, setPotholes] = useState([]);
-  const [center, setCenter] = useState([19.14, 72.89]);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  // Map of potholeId → { loading, src } so each popup manages its own image state
+  const [potholes, setPotholes]       = useState([]);
+  const [center, setCenter]           = useState([19.14, 72.89]);
+  const [error, setError]             = useState("");
+  const [loading, setLoading]         = useState(true);
   const [potholeImages, setPotholeImages] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
 
@@ -92,15 +57,16 @@ export default function MapPage() {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setCurrentUser(payload.user);
-      } catch (err) {
-        console.error("Error decoding token:", err);
-      }
+      } catch (e) { console.error("Token decode error:", e); }
     }
   }, []);
 
-  const fetchPotholes = async () => {
+  // FIX: fetch ALL potholes, not just nearby ones.
+  // Uses the new /potholes/all endpoint — no center point needed,
+  // returns up to 500 records, safe for MongoDB Atlas M0.
+  const fetchAllPotholes = useCallback(async () => {
     try {
-      const response = await api.get(`/potholes/nearby/${center[0]}/${center[1]}?radius=50000`);
+      const response = await api.get('/potholes/all');
       setPotholes(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error("Error fetching potholes:", err);
@@ -108,15 +74,13 @@ export default function MapPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // FIX: Per-pothole image fetch stored in a map keyed by _id.
-  // Previously a single `selectedPothole` state meant opening one popup
-  // would affect every other popup on the map.
+  // On mount — load everything
+  useEffect(() => { fetchAllPotholes(); }, [fetchAllPotholes]);
+
   const fetchPotholeImage = async (potholeId, contentType) => {
-    // Already loaded — don't re-fetch
     if (potholeImages[potholeId]?.src) return;
-
     setPotholeImages(prev => ({ ...prev, [potholeId]: { loading: true, src: null } }));
     try {
       const response = await api.get(`/potholes/${potholeId}`);
@@ -128,56 +92,49 @@ export default function MapPage() {
     }
   };
 
-  useEffect(() => { fetchPotholes(); }, [center]);
-
+  // After upload: move map to the new pothole's location, then refresh all potholes
   const handlePhotoLocation = (coords) => {
     if (coords?.length === 2) {
       setCenter([coords[0], coords[1]]);
-      setTimeout(() => fetchPotholes(), 1000);
     }
   };
 
-  const handleUploadSuccess = () => setTimeout(() => fetchPotholes(), 1000);
-
-  const getStatusColor = (status) => {
-    const colors = {
-      reported: "bg-blue-100 text-blue-800 border-blue-200",
-      under_review: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      in_progress: "bg-orange-100 text-orange-800 border-orange-200",
-      resolved: "bg-green-100 text-green-800 border-green-200",
-      rejected: "bg-red-100 text-red-800 border-red-200",
-    };
-    return colors[status] || "bg-gray-100 text-gray-800 border-gray-200";
+  const handleUploadSuccess = () => {
+    // Small delay to let the backend finish writing before re-fetching
+    setTimeout(() => fetchAllPotholes(), 1500);
   };
 
-  const getStatusText = (status) => {
-    const texts = {
-      reported: "📝 Reported", under_review: "🔍 Under Review",
-      in_progress: "🚧 In Progress", resolved: "✅ Resolved", rejected: "❌ Rejected",
-    };
-    return texts[status] || status;
-  };
+  const getStatusColor = (status) => ({
+    reported:     "bg-blue-100 text-blue-800 border-blue-200",
+    under_review: "bg-yellow-100 text-yellow-800 border-yellow-200",
+    in_progress:  "bg-orange-100 text-orange-800 border-orange-200",
+    resolved:     "bg-green-100 text-green-800 border-green-200",
+    rejected:     "bg-red-100 text-red-800 border-red-200",
+  }[status] || "bg-gray-100 text-gray-800 border-gray-200");
+
+  const getStatusText = (status) => ({
+    reported:     "📝 Reported",
+    under_review: "🔍 Under Review",
+    in_progress:  "🚧 In Progress",
+    resolved:     "✅ Resolved",
+    rejected:     "❌ Rejected",
+  }[status] || status);
 
   const getStatusIcon = (status) => statusIcons[status] || statusIcons.reported;
 
-  const getStatusStats = () => {
-    if (!Array.isArray(potholes)) return { reported: 0, under_review: 0, in_progress: 0, resolved: 0, rejected: 0 };
-    return {
-      reported:     potholes.filter(p => p.status === 'reported').length,
-      under_review: potholes.filter(p => p.status === 'under_review').length,
-      in_progress:  potholes.filter(p => p.status === 'in_progress').length,
-      resolved:     potholes.filter(p => p.status === 'resolved').length,
-      rejected:     potholes.filter(p => p.status === 'rejected').length,
-    };
+  const statusStats = {
+    reported:     potholes.filter(p => p.status === 'reported').length,
+    under_review: potholes.filter(p => p.status === 'under_review').length,
+    in_progress:  potholes.filter(p => p.status === 'in_progress').length,
+    resolved:     potholes.filter(p => p.status === 'resolved').length,
+    rejected:     potholes.filter(p => p.status === 'rejected').length,
   };
-
-  const statusStats = getStatusStats();
 
   return (
     <div className="space-y-6 p-4">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-800">Pothole Grievance Reporter</h1>
-        <p className="text-gray-600 mt-2">Showing all reported potholes in the area</p>
+        <p className="text-gray-600 mt-2">Showing all reported potholes across all locations</p>
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -186,6 +143,7 @@ export default function MapPage() {
 
       {error && <div className="bg-red-50 p-4 rounded text-red-700">{error}</div>}
 
+      {/* Status stats — same layout as Status page */}
       <div className="flex flex-wrap justify-center gap-3 text-center">
         {[
           ['blue',   'reported',     'Reported'],
@@ -203,7 +161,7 @@ export default function MapPage() {
 
       <div className="text-center">
         <p className="text-2xl font-bold text-blue-600">{potholes.length}</p>
-        <p className="text-gray-600">Total Potholes Nearby</p>
+        <p className="text-gray-600">Total Potholes Reported</p>
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-4">
@@ -222,7 +180,7 @@ export default function MapPage() {
         {loading ? (
           <div className="h-full flex items-center justify-center"><p>Loading potholes...</p></div>
         ) : (
-          <MapContainer center={center} zoom={10} style={{ height: "100%", width: "100%" }} scrollWheelZoom={true}>
+          <MapContainer center={center} zoom={5} style={{ height: "100%", width: "100%" }} scrollWheelZoom={true}>
             <MapCenterUpdater center={center} />
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -244,7 +202,6 @@ export default function MapPage() {
                           {getStatusText(pothole.status)}
                         </span>
                       </div>
-
                       <div className="space-y-2 text-sm text-left">
                         <div>
                           <span className="text-gray-600">Location:</span>
@@ -272,7 +229,6 @@ export default function MapPage() {
                         )}
                       </div>
 
-                      {/* Image section — only shown to logged-in users */}
                       {currentUser && (
                         <div className="mt-3">
                           {!imgState && (
@@ -283,17 +239,14 @@ export default function MapPage() {
                               📸 Show Image
                             </button>
                           )}
-
                           {imgState?.loading && (
                             <div className="flex items-center justify-center gap-2 py-2 text-sm text-gray-500">
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
                               Loading image...
                             </div>
                           )}
-
                           {imgState && !imgState.loading && imgState.src && (
                             <div className="space-y-1 mt-1">
-                              {/* FIX: toImageSrc() converts MongoDB binary → base64 data URL */}
                               <img
                                 src={imgState.src}
                                 alt="Pothole"
@@ -303,7 +256,6 @@ export default function MapPage() {
                               <p className="text-xs text-gray-400 text-center">Click outside to close</p>
                             </div>
                           )}
-
                           {imgState && !imgState.loading && !imgState.src && (
                             <p className="text-sm text-red-500 mt-1">
                               {imgState.error ? 'Failed to load image' : 'No image available'}
