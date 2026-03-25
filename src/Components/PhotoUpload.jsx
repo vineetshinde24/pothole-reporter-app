@@ -71,8 +71,10 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
 
       if (onLocationFound) onLocationFound([gps.latitude, gps.longitude]);
 
-      const formData = new FormData();
-      formData.append("file", file);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("latitude", gps.latitude);
+    formData.append("longitude", gps.longitude);
 
       const response = await api.post("/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -100,11 +102,6 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
       setLoading(false);
     }
   };
-
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("latitude", gps.latitude);
-  formData.append("longitude", gps.longitude);
 
   return (
     <div className="space-y-4 p-4 border rounded-lg bg-white">
