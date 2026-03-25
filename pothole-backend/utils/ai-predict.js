@@ -2,73 +2,69 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const predictPothole = (imageBuffer) => {
+const scriptPath = path.join(__dirname, '../ml-model/predict.py');
+const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+
+// ✅ Temp dir setup
+const tempDir = path.join(__dirname, '../temp');
+if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+// ✅ Generic function to run predict.py with a mode
+const runPrediction = (imageBuffer, mode) => {
     return new Promise((resolve, reject) => {
-        try {
-            const scriptPath = path.join(__dirname, '../ml-model/predict.py');
-            
-            // Create temporary file
-            const tempDir = path.join(__dirname, '../temp');
-            if (!fs.existsSync(tempDir)) {
-                fs.mkdirSync(tempDir, { recursive: true });
+        const tempFilePath = path.join(tempDir, `temp_${Date.now()}_${mode}.jpg`);
+        fs.writeFileSync(tempFilePath, imageBuffer);
+
+        const pythonProcess = spawn(pythonCommand, [scriptPath, tempFilePath, mode]);
+        let result = '';
+
+        pythonProcess.stdout.on('data', (data) => { result += data.toString(); });
+
+        pythonProcess.stderr.on('data', (data) => {
+            const logLine = data.toString();
+            if (!logLine.includes('oneDNN') &&
+                !logLine.includes('CPU instructions') &&
+                !logLine.includes('TensorFlow binary') &&
+                !logLine.includes('Loading') &&
+                !logLine.includes('loaded')) {
+                console.error('❌ AI Error:', logLine);
             }
-            
-            const tempFilePath = path.join(tempDir, `temp_${Date.now()}.jpg`);
-            fs.writeFileSync(tempFilePath, imageBuffer);
-            
-            console.log('🔄 Starting AI verification...');
-            
-            // Auto-detect Python path
-            const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-            
-            const pythonProcess = spawn(pythonCommand, [scriptPath, tempFilePath]);
+        });
 
-            let result = '';
-            let error = '';
+        pythonProcess.on('close', (code) => {
+            try { fs.unlinkSync(tempFilePath); } catch (e) {}
 
-            pythonProcess.stdout.on('data', (data) => {
-                result += data.toString();
-            });
-
-            pythonProcess.stderr.on('data', (data) => {
-                // Filter out TensorFlow info logs
-                const logLine = data.toString();
-                if (!logLine.includes('oneDNN') && 
-                    !logLine.includes('CPU instructions') &&
-                    !logLine.includes('TensorFlow binary')) {
-                    console.error('❌ AI Error:', logLine);
-                }
-            });
-
-            pythonProcess.on('close', (code) => {
-                // Clean up temp file
+            if (code === 0) {
                 try {
-                    fs.unlinkSync(tempFilePath);
+                    resolve(JSON.parse(result));
                 } catch (e) {
-                    // Silent cleanup
+                    reject(new Error(`Failed to parse AI output: ${result}`));
                 }
-                
-                if (code === 0) {
-                    try {
-                        const output = JSON.parse(result);
-                        console.log(`✅ AI Confidence: ${(output.confidence * 100).toFixed(1)}%`);
-                        resolve(output.confidence);
-                    } catch (parseError) {
-                        reject(new Error(`Failed to parse AI output`));
-                    }
-                } else {
-                    reject(new Error(`AI verification failed`));
-                }
-            });
+            } else {
+                reject(new Error(`AI process exited with code ${code}`));
+            }
+        });
 
-            pythonProcess.on('error', (error) => {
-                reject(new Error(`AI service unavailable - make sure Python is installed`));
-            });
-
-        } catch (error) {
-            reject(error);
-        }
+        pythonProcess.on('error', () => {
+            reject(new Error('AI service unavailable - make sure Python is installed'));
+        });
     });
 };
 
-module.exports = { predictPothole };
+// ✅ Detection
+const predictPothole = async (imageBuffer) => {
+    console.log('🔄 Starting AI verification...');
+    const output = await runPrediction(imageBuffer, 'detect');
+    console.log(`✅ AI Confidence: ${(output.confidence * 100).toFixed(1)}%`);
+    return output.confidence;
+};
+
+// ✅ Severity
+const predictSeverity = async (imageBuffer) => {
+    console.log('🔄 Starting severity analysis...');
+    const output = await runPrediction(imageBuffer, 'severity');
+    console.log(`✅ Severity: ${output.severity} (${(output.severity_confidence * 100).toFixed(1)}%)`);
+    return output;
+};
+
+module.exports = { predictPothole, predictSeverity };

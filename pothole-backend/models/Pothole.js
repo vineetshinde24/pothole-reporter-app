@@ -25,6 +25,8 @@ const potholeImageSchema = new mongoose.Schema({
     enum: ['reported', 'under_review', 'in_progress', 'resolved', 'rejected'],
     default: 'reported'
   },
+  severity: { type: String, enum: ['severe', 'non_severe', 'unknown'], default: 'unknown' },
+  severity_confidence: { type: Number, default: 0 },
   resolvedAt: { type: Date },
   resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   resolutionNotes: { type: String }
