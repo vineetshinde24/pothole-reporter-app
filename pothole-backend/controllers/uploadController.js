@@ -31,7 +31,15 @@ exports.uploadImage = async (req, res) => {
 
     // Step 2: Extract GPS data
     const gpsData = await exifr.gps(req.file.buffer);
-    if (!gpsData?.latitude || !gpsData?.longitude) {
+
+    if (gpsData?.latitude && gpsData?.longitude) {
+      latitude = gpsData.latitude;
+      longitude = gpsData.longitude;
+    } else if (req.body.latitude && req.body.longitude) {
+      // Fallback to coordinates sent from frontend
+      latitude = parseFloat(req.body.latitude);
+      longitude = parseFloat(req.body.longitude);
+    } else {
       return res.status(400).json({ message: 'No GPS data found in image' });
     }
 
@@ -41,11 +49,11 @@ exports.uploadImage = async (req, res) => {
 
     const potholeImage = new PotholeImage({
       image: imageData,
-      latitude: gpsData.latitude,
-      longitude: gpsData.longitude,
+      latitude: latitude,
+      longitude: longitude,
       location: {
         type: 'Point',
-        coordinates: [gpsData.longitude, gpsData.latitude] // GeoJSON: [lng, lat]
+        coordinates: [longitude, latitude] // GeoJSON: [lng, lat]
       },
       timestamp: new Date(),
       reportedBy: req.user.id,

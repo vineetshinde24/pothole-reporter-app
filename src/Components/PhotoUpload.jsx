@@ -101,6 +101,11 @@ export default function PhotoUpload({ onLocationFound, onUploadSuccess }) {
     }
   };
 
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("latitude", gps.latitude);
+  formData.append("longitude", gps.longitude);
+
   return (
     <div className="space-y-4 p-4 border rounded-lg bg-white">
       <label className="block text-sm font-medium">Upload Pothole Photo</label>
