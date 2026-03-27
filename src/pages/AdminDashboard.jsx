@@ -35,7 +35,7 @@ export default function AdminDashboard() {
       ]);
       setStats(statsRes.data);
       setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
-      setPotholes(Array.isArray(potholesRes.data) ? potholesRes.data : []);
+      setPotholes(Array.isArray(potholesRes.data.potholes) ? potholesRes.data.potholes : []);
       setSelectedPotholes(new Set());
     } catch (err) {
       console.error("Admin dashboard error:", err);
