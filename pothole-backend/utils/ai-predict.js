@@ -5,11 +5,11 @@ const fs = require('fs');
 const scriptPath = path.join(__dirname, '../ml-model/predict.py');
 const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
 
-// ✅ Temp dir setup
+// Temp folder for input images
 const tempDir = path.join(__dirname, '../temp');
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-// ✅ Generic function to run predict.py with a mode
+// --- RUN PREDICTION ---
 const runPrediction = (imageBuffer, mode) => {
     return new Promise((resolve, reject) => {
         const tempFilePath = path.join(tempDir, `temp_${Date.now()}_${mode}.jpg`);
@@ -21,47 +21,40 @@ const runPrediction = (imageBuffer, mode) => {
         pythonProcess.stdout.on('data', (data) => { result += data.toString(); });
 
         pythonProcess.stderr.on('data', (data) => {
-            const logLine = data.toString();
-            if (!logLine.includes('oneDNN') &&
-                !logLine.includes('CPU instructions') &&
-                !logLine.includes('TensorFlow binary') &&
-                !logLine.includes('Loading') &&
-                !logLine.includes('loaded')) {
-                console.error('❌ AI Error:', logLine);
+            const line = data.toString();
+            if (!line.includes('oneDNN') &&
+                !line.includes('CPU instructions') &&
+                !line.includes('TensorFlow binary') &&
+                !line.includes('Loading') &&
+                !line.includes('loaded')) {
+                console.error('❌ AI Error:', line);
             }
         });
 
         pythonProcess.on('close', (code) => {
-            try { fs.unlinkSync(tempFilePath); } catch (e) {}
-
+            try { fs.unlinkSync(tempFilePath); } catch {}
             if (code === 0) {
-                try {
-                    resolve(JSON.parse(result));
-                } catch (e) {
-                    reject(new Error(`Failed to parse AI output: ${result}`));
-                }
+                try { resolve(JSON.parse(result)); }
+                catch (e) { reject(new Error(`Failed to parse output: ${result}`)); }
             } else {
-                reject(new Error(`AI process exited with code ${code}`));
+                reject(new Error(`Python exited with code ${code}`));
             }
         });
 
-        pythonProcess.on('error', () => {
-            reject(new Error('AI service unavailable - make sure Python is installed'));
-        });
+        pythonProcess.on('error', () => reject(new Error('Python not available')));
     });
 };
 
-// ✅ Detection
+// --- PUBLIC FUNCTIONS ---
 const predictPothole = async (imageBuffer) => {
-    console.log('🔄 Starting AI verification...');
+    console.log('🔄 Running pothole detection...');
     const output = await runPrediction(imageBuffer, 'detect');
-    console.log(`✅ AI Confidence: ${(output.confidence * 100).toFixed(1)}%`);
+    console.log(`✅ Confidence: ${(output.confidence * 100).toFixed(1)}%`);
     return output.confidence;
 };
 
-// ✅ Severity
 const predictSeverity = async (imageBuffer) => {
-    console.log('🔄 Starting severity analysis...');
+    console.log('🔄 Running severity prediction...');
     const output = await runPrediction(imageBuffer, 'severity');
     console.log(`✅ Severity: ${output.severity} (${(output.severity_confidence * 100).toFixed(1)}%)`);
     return output;
