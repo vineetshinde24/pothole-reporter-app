@@ -1,77 +1,75 @@
 import sys
+import os
 import json
 import numpy as np
 from PIL import Image
-import os
 import onnxruntime as ort
 
-# Suppress TensorFlow logs (not needed anymore)
+# ── Suppress verbose logs ────────────────────────────────────────────────
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import logging
+logging.getLogger('onnxruntime').setLevel(logging.ERROR)
 
+# ── MODEL PATHS ─────────────────────────────────────────────────────────
 MODEL_DIR = os.path.dirname(__file__)
+DETECTION_MODEL_PATH = os.path.join(MODEL_DIR, 'pothole_detection_v3.onnx')
+SEVERITY_MODEL_PATH  = os.path.join(MODEL_DIR, 'pothole_severity_v2.onnx')
 
-# --- LOAD MODELS ONCE ---
-DETECTION_ONNX = os.path.join(MODEL_DIR, 'pothole_detection_v3.onnx')
-SEVERITY_ONNX  = os.path.join(MODEL_DIR, 'pothole_severity_v2.onnx')
-
-print("Loading pothole detection model...", file=sys.stderr)
-detection_session = ort.InferenceSession(DETECTION_ONNX)
-detection_input_name = detection_session.get_inputs()[0].name
-print("✅ Detection model loaded", file=sys.stderr)
-
-print("Loading severity model...", file=sys.stderr)
-severity_session = ort.InferenceSession(SEVERITY_ONNX)
+# ── LOAD ONNX SESSIONS (once) ──────────────────────────────────────────
+print("🔄 Loading ONNX models...", file=sys.stderr)
+detection_session = ort.InferenceSession(DETECTION_MODEL_PATH, providers=['CPUExecutionProvider'])
+severity_session  = ort.InferenceSession(SEVERITY_MODEL_PATH,  providers=['CPUExecutionProvider'])
 severity_input_name = severity_session.get_inputs()[0].name
-print("✅ Severity model loaded", file=sys.stderr)
+print("✅ Models loaded", file=sys.stderr)
 
-
-# --- PREPROCESSING ---
-def preprocess_image(img: Image.Image, size: int) -> np.ndarray:
-    """Resize, normalize to [0,1], HWC→CHW, add batch dimension."""
-    img = img.convert('RGB').resize((size, size))
-    arr = np.array(img).astype(np.float32) / 255.0
-    arr = np.transpose(arr, (2, 0, 1))  # HWC → CHW
-    arr = np.expand_dims(arr, 0)        # Add batch
-    return arr
-
+# ── HELPER FUNCTIONS ────────────────────────────────────────────────────
+def preprocess_image(image_path, img_size=260):
+    """
+    Load image, convert to RGB, resize and normalize to [0,1], then return CHW + batch.
+    """
+    img = Image.open(image_path).convert('RGB')
+    arr = np.array(img.resize((img_size, img_size)), dtype=np.float32) / 255.0
+    arr = np.transpose(arr, (2, 0, 1))   # HWC → CHW
+    return np.expand_dims(arr, axis=0)   # Add batch dimension
 
 def softmax(x):
     e_x = np.exp(x - np.max(x))
     return e_x / e_x.sum()
 
-
-# --- PREDICTION ---
+# ── PREDICTION FUNCTIONS ───────────────────────────────────────────────
 def predict_pothole(image_path):
-    img = Image.open(image_path)
-    inp = preprocess_image(img, size=260)  # EfficientNet-B2 input size
-    output = detection_session.run(None, {detection_input_name: inp})
-    confidence = float(output[0][0][0])  # already sigmoid in ONNX
+    """
+    Returns detection confidence (0 → normal, 1 → pothole)
+    """
+    inp = preprocess_image(image_path, img_size=260)
+    output = detection_session.run(None, {'image': inp})
+    confidence = float(output[0][0][0])
     return confidence
 
-
 def predict_severity(image_path):
-    img = Image.open(image_path)
-    inp = preprocess_image(img, size=260)
-    output = severity_session.run(None, {severity_input_name: inp})
-    logits = output[0][0]
+    """
+    Returns severity label ('non_severe' or 'severe') and confidence
+    """
+    inp = preprocess_image(image_path, img_size=260)
+    outputs = severity_session.run(None, {severity_input_name: inp})
+    logits = outputs[0][0]
     probs = softmax(logits)
-    severity_labels = ['non_severe', 'severe']
+    classes = ['non_severe', 'severe']
     pred_idx = int(np.argmax(probs))
-    return severity_labels[pred_idx], float(np.max(probs))
+    return classes[pred_idx], float(np.max(probs))
 
-
-# --- MAIN ENTRY ---
+# ── MAIN ENTRY ─────────────────────────────────────────────────────────
 if __name__ == "__main__":
     try:
         image_path = sys.argv[1]
         mode = sys.argv[2] if len(sys.argv) > 2 else 'detect'
 
         if mode == 'severity':
-            severity, sev_conf = predict_severity(image_path)
-            print(json.dumps({"severity": severity, "severity_confidence": sev_conf}))
+            severity, conf = predict_severity(image_path)
+            print(json.dumps({"severity": severity, "severity_confidence": conf}))
         else:
-            confidence = predict_pothole(image_path)
-            print(json.dumps({"confidence": confidence}))
+            conf = predict_pothole(image_path)
+            print(json.dumps({"confidence": conf}))
 
     except Exception as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
