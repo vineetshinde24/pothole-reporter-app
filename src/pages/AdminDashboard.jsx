@@ -117,10 +117,7 @@ export default function AdminDashboard() {
 
   const updatePotholeStatus = async (potholeId, status, notes = "") => {
     try {
-      const response = await api.patch(`/admin/potholes/${potholeId}/status`, {
-        status,
-        resolutionNotes: notes
-      });
+      await api.patch(`/admin/potholes/${potholeId}/status`, { status, resolutionNotes: notes });
       alert(`✅ Status updated to: ${status}`);
       fetchDashboardData();
     } catch (err) {
@@ -164,23 +161,25 @@ export default function AdminDashboard() {
     else { setSelectedPotholes(new Set(potholes.map(p => p._id))); }
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      reported: "bg-blue-100 text-blue-800 border-blue-200",
-      under_review: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      in_progress: "bg-orange-100 text-orange-800 border-orange-200",
-      resolved: "bg-green-100 text-green-800 border-green-200",
-      rejected: "bg-red-100 text-red-800 border-red-200"
-    };
-    return colors[status] || "bg-gray-100 text-gray-800 border-gray-200";
-  };
+  const getStatusColor = (status) => ({
+    reported:     "bg-blue-100 text-blue-800 border-blue-200",
+    under_review: "bg-yellow-100 text-yellow-800 border-yellow-200",
+    in_progress:  "bg-orange-100 text-orange-800 border-orange-200",
+    resolved:     "bg-green-100 text-green-800 border-green-200",
+    rejected:     "bg-red-100 text-red-800 border-red-200"
+  }[status] || "bg-gray-100 text-gray-800 border-gray-200");
 
-  const getStatusText = (status) => {
-    const texts = {
-      reported: "Reported", under_review: "Under Review",
-      in_progress: "In Progress", resolved: "Resolved", rejected: "Rejected"
-    };
-    return texts[status] || status;
+  const getStatusText = (status) => ({
+    reported: "Reported", under_review: "Under Review",
+    in_progress: "In Progress", resolved: "Resolved", rejected: "Rejected"
+  }[status] || status);
+
+  const getSeverityBadge = (severity) => {
+    if (severity === 'severe')
+      return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-500 text-white border border-red-600">SEVERE</span>;
+    if (severity === 'non_severe')
+      return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-400 text-white border border-orange-500">NON SEVERE</span>;
+    return <span className="text-gray-400 text-xs">—</span>;
   };
 
   if (loading) return <div className="flex justify-center items-center h-64">Loading...</div>;
@@ -275,6 +274,7 @@ export default function AdminDashboard() {
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Location</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Reported By</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Severity</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">AI Confidence</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
@@ -294,6 +294,7 @@ export default function AdminDashboard() {
                     </div>
                   </td>
                   <td className="px-4 py-3">{pothole.reportedBy?.username || 'Unknown'}</td>
+                  <td className="px-4 py-3">{getSeverityBadge(pothole.severity)}</td>
                   <td className="px-4 py-3">
                     {pothole.ai_confidence ? (
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${

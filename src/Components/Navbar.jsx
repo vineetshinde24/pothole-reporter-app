@@ -31,7 +31,7 @@ export default function Navbar({ user, onLogout }) {
           <Link to="/" className="flex items-center gap-2 font-bold text-base hover:text-blue-200 shrink-0">
             <img src="/pothole.png" alt="logo" className="h-8 w-8" />
             <span className="hidden sm:inline">Pothole Grievance Reporter</span>
-            <span className="sm:hidden">Pothole App</span>
+            <span className="sm:hidden">Pothole Grievance Reportor</span>
           </Link>
 
           {/* Desktop Nav */}
@@ -43,7 +43,7 @@ export default function Navbar({ user, onLogout }) {
                 <Link to="/status" className="hover:text-blue-200 transition-colors">Status</Link>
                 {(user.role === 'admin' || user.role === 'Admin') && (
                   <Link to="/admin" className="bg-yellow-500 hover:bg-yellow-400 px-3 py-1 rounded transition-colors">
-                    Admin
+                    Admin Dashboard
                   </Link>
                 )}
                 <div className="flex items-center gap-2 border-l border-blue-400 pl-4">

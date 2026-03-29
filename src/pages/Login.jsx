@@ -6,6 +6,7 @@ const Login = ({ setUser }) => {
   const [formData, setFormData] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
 
   const handleChange = (e) => {
@@ -22,17 +23,13 @@ const Login = ({ setUser }) => {
     setLoading(true)
     setError('')
     try {
-      const response = await api.post('/auth/login', {
-        email: formData.email,
-        password: formData.password
-      })
+      const response = await api.post('/auth/login', formData)
       const { token, user } = response.data
       localStorage.setItem('authToken', token)
       localStorage.setItem('userData', JSON.stringify(user))
       setUser(user)
       navigate('/map')
     } catch (err) {
-      console.error('Login error:', err)
       setError(err.response?.data?.message || 'Login failed. Please try again.')
     } finally {
       setLoading(false)
@@ -54,6 +51,7 @@ const Login = ({ setUser }) => {
         )}
 
         <form onSubmit={handleSubmit} className="auth-form">
+          {/* Email */}
           <div className="form-group">
             <label htmlFor="email" className="form-label">Email Address</label>
             <input
@@ -65,34 +63,42 @@ const Login = ({ setUser }) => {
               className="form-input"
               placeholder="Enter your email"
               required
+              autoFocus
             />
           </div>
 
+          {/* Password */}
           <div className="form-group">
             <label htmlFor="password" className="form-label">Password</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="form-input"
-              placeholder="Enter your password"
-              required
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="form-input"
+                placeholder="Enter your password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-600"
+              >
+                {showPassword ? '✖' : '👁'}
+              </button>
+            </div>
           </div>
 
           <button type="submit" className="btn btn-primary auth-btn" disabled={loading}>
-            {loading ? (
-              <><div className="loading-spinner small"></div>Signing In...</>
-            ) : 'Sign In'}
+            {loading ? <><div className="loading-spinner small"></div>Signing In...</> : 'Sign In'}
           </button>
         </form>
 
         <div className="auth-footer">
           <p>
-            Don't have an account?{' '}
-            <Link to="/register" className="auth-link">Sign up here</Link>
+            Don't have an account? <Link to="/register" className="auth-link">Sign up here</Link>
           </p>
         </div>
       </div>

@@ -20,6 +20,11 @@ const statusIcons = {
   rejected:     new L.Icon({ iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNlMTExMTEiIHN0cm9rZT0iI2I5MWQxZCIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+', iconSize: [25,41], iconAnchor: [12,41], popupAnchor: [1,-34] }),
 };
 
+const severityColors = {
+  severe: '#ff4d4f',      // red
+  non_severe: '#fa8c16',  // orange
+};
+
 function MapCenterUpdater({ center }) {
   const map = useMap();
   useEffect(() => {
@@ -61,9 +66,6 @@ export default function MapPage() {
     }
   }, []);
 
-  // FIX: fetch ALL potholes, not just nearby ones.
-  // Uses the new /potholes/all endpoint — no center point needed,
-  // returns up to 500 records, safe for MongoDB Atlas M0.
   const fetchAllPotholes = useCallback(async () => {
     try {
       const response = await api.get('/potholes/all');
@@ -76,7 +78,6 @@ export default function MapPage() {
     }
   }, []);
 
-  // On mount — load everything
   useEffect(() => { fetchAllPotholes(); }, [fetchAllPotholes]);
 
   const fetchPotholeImage = async (potholeId, contentType) => {
@@ -92,17 +93,8 @@ export default function MapPage() {
     }
   };
 
-  // After upload: move map to the new pothole's location, then refresh all potholes
-  const handlePhotoLocation = (coords) => {
-    if (coords?.length === 2) {
-      setCenter([coords[0], coords[1]]);
-    }
-  };
-
-  const handleUploadSuccess = () => {
-    // Small delay to let the backend finish writing before re-fetching
-    setTimeout(() => fetchAllPotholes(), 1500);
-  };
+  const handlePhotoLocation = (coords) => { if (coords?.length === 2) setCenter([coords[0], coords[1]]); };
+  const handleUploadSuccess = () => setTimeout(() => fetchAllPotholes(), 1500);
 
   const getStatusColor = (status) => ({
     reported:     "bg-blue-100 text-blue-800 border-blue-200",
@@ -120,7 +112,14 @@ export default function MapPage() {
     rejected:     "❌ Rejected",
   }[status] || status);
 
-  const getStatusIcon = (status) => statusIcons[status] || statusIcons.reported;
+  const getStatusIcon = (status, severity) => {
+    const baseIcon = statusIcons[status] || statusIcons.reported;
+    if (!severity) return baseIcon;
+
+    const colorHex = severityColors[severity] || '#000000';
+    const newIconUrl = baseIcon.options.iconUrl.replace(/#[0-9a-fA-F]{6}/, colorHex.slice(1));
+    return new L.Icon({ ...baseIcon.options, iconUrl: newIconUrl });
+  };
 
   const statusStats = {
     reported:     potholes.filter(p => p.status === 'reported').length,
@@ -128,6 +127,11 @@ export default function MapPage() {
     in_progress:  potholes.filter(p => p.status === 'in_progress').length,
     resolved:     potholes.filter(p => p.status === 'resolved').length,
     rejected:     potholes.filter(p => p.status === 'rejected').length,
+  };
+
+  const severityStats = {
+    severe: potholes.filter(p => p.severity === 'severe').length,
+    non_severe: potholes.filter(p => p.severity === 'non_severe').length,
   };
 
   return (
@@ -143,37 +147,59 @@ export default function MapPage() {
 
       {error && <div className="bg-red-50 p-4 rounded text-red-700">{error}</div>}
 
-      {/* Status stats — same layout as Status page */}
-      <div className="flex flex-wrap justify-center gap-3 text-center">
-        {[
-          ['blue',   'reported',     'Reported'],
-          ['yellow', 'under_review', 'Under Review'],
-          ['orange', 'in_progress',  'In Progress'],
-          ['green',  'resolved',     'Resolved'],
-          ['red',    'rejected',     'Rejected'],
-        ].map(([color, key, label]) => (
-          <div key={key} className={`p-3 rounded-lg border-2 border-${color}-200 bg-${color}-50 flex-1 min-w-[120px] max-w-[200px]`}>
-            <p className={`text-xl font-bold text-${color}-600`}>{statusStats[key]}</p>
-            <p className={`text-xs text-${color}-800`}>{label}</p>
+    {/* Status stats */}
+    <div className="flex flex-wrap justify-center gap-3 text-center">
+      {[
+        ['blue', 'reported', 'Reported'],
+        ['yellow', 'under_review', 'Under Review'],
+        ['orange', 'in_progress', 'In Progress'],
+        ['green', 'resolved', 'Resolved'],
+        ['red', 'rejected', 'Rejected'],
+      ].map(([color, key, label]) => {
+        const colorMap = {
+          blue: 'bg-blue-50 border-blue-200 text-blue-800',
+          yellow: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+          orange: 'bg-orange-50 border-orange-200 text-orange-800',
+          green: 'bg-green-50 border-green-200 text-green-800',
+          red: 'bg-red-50 border-red-200 text-red-800',
+        };
+        return (
+          <div
+            key={key}
+            className={`p-3 rounded-lg border-2 flex-1 min-w-[120px] max-w-[200px] ${colorMap[color]}`}
+          >
+            <p className="text-xl font-bold">{statusStats[key]}</p>
+            <p className="text-xs">{label}</p>
           </div>
-        ))}
-      </div>
+        );
+      })}
+    </div>
 
-      <div className="text-center">
+    {/* Severity stats */}
+    <div className="flex flex-wrap justify-center gap-3 text-center mt-2">
+      {[
+        ['red', 'severe', 'Severe'],
+        ['orange', 'non_severe', 'Non-severe'],
+      ].map(([color, key, label]) => {
+        const colorMap = {
+          red: 'bg-red-500 border-red-200 text-white',
+          orange: 'bg-orange-500 border-orange-200 text-white',
+        };
+        return (
+          <div
+            key={key}
+            className={`p-3 rounded-lg border-2 flex-1 min-w-[120px] max-w-[200px] ${colorMap[color]}`}
+          >
+            <p className="text-xl font-bold">{severityStats[key]}</p>
+            <p className="text-xs">{label}</p>
+          </div>
+        );
+      })}
+    </div>
+
+      <div className="text-center mt-2">
         <p className="text-2xl font-bold text-blue-600">{potholes.length}</p>
         <p className="text-gray-600">Total Potholes Reported</p>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-md p-4">
-        <h4 className="font-semibold mb-2">Pin Color Indicators</h4>
-        <div className="flex flex-wrap gap-4 text-sm">
-          {[['blue','Reported'],['yellow','Under Review'],['orange','In Progress'],['green','Resolved'],['red','Rejected']].map(([color, label]) => (
-            <div key={color} className="flex items-center space-x-2">
-              <div className={`w-4 h-4 bg-${color}-500 rounded-full`}></div>
-              <span>{label}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
       <div className="h-[90vh] rounded-lg overflow-hidden shadow-lg border-2 border-gray-200 mx-5 mb-4">
@@ -192,35 +218,78 @@ export default function MapPage() {
                 <Marker
                   key={pothole._id}
                   position={[pothole.latitude, pothole.longitude]}
-                  icon={getStatusIcon(pothole.status)}
+                  icon={getStatusIcon(pothole.status, pothole.severity)}
                 >
                   <Popup closeOnClick={false} minWidth={240}>
                     <div className="text-center min-w-[220px]">
+                      <p className="font-bold text-gray-800 text-lg">Pothole Report</p>
                       <div className="flex justify-between items-center mb-2">
-                        <p className="font-bold text-gray-800">Pothole Report</p>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(pothole.status)}`}>
                           {getStatusText(pothole.status)}
                         </span>
+                        {pothole.severity && (
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              pothole.severity === 'severe'
+                                ? 'bg-red-500 text-white border-red-600'
+                                : 'bg-orange-500 text-white border-orange-600'
+                            }`}
+                          >
+                            {pothole.severity.replace('_', ' ').toUpperCase()}
+                          </span>
+                        )}
                       </div>
+
                       <div className="space-y-2 text-sm text-left">
-                        <div>
+                        <div className="flex justify-between">
                           <span className="text-gray-600">Location:</span>
-                          <div className="font-mono text-xs">{pothole.latitude.toFixed(6)}, {pothole.longitude.toFixed(6)}</div>
+                          <span className="font-mono text-xs">{pothole.latitude.toFixed(6)}, {pothole.longitude.toFixed(6)}</span>
                         </div>
+
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Reported:</span>
+                          <span className="font-medium text-xs">
+                            {pothole.reportedAt || pothole.createdAt
+                              ? new Date(pothole.reportedAt || pothole.createdAt).toLocaleString(undefined, {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  hour12: true
+                                })
+                              : 'N/A'}
+                          </span>
+                        </div>
+
+                        {pothole.resolvedAt && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Resolved:</span>
+                            <span className="font-medium text-green-600 text-xs">
+                              {new Date(pothole.resolvedAt).toLocaleString(undefined, {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: true
+                              })}
+                            </span>
+                          </div>
+                        )}
+
                         <div className="flex justify-between">
                           <span className="text-gray-600">AI Confidence:</span>
-                          <span className="font-medium">{pothole.ai_confidence ? `${(pothole.ai_confidence * 100).toFixed(1)}%` : 'N/A'}</span>
+                          <span className="font-medium">
+                            {pothole.ai_confidence ? `${(pothole.ai_confidence * 100).toFixed(1)}%` : 'N/A'}
+                          </span>
                         </div>
+
                         <div className="flex justify-between">
                           <span className="text-gray-600">Reported by:</span>
                           <span className="font-medium">{pothole.reportedBy?.username || 'Unknown'}</span>
                         </div>
-                        {pothole.resolvedAt && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Resolved:</span>
-                            <span className="font-medium text-green-600 text-xs">{new Date(pothole.resolvedAt).toLocaleDateString()}</span>
-                          </div>
-                        )}
+
                         {pothole.resolutionNotes && (
                           <div className="mt-2 p-2 bg-gray-50 rounded border">
                             <span className="text-gray-600 text-xs block mb-1">Admin Notes:</span>
@@ -231,7 +300,7 @@ export default function MapPage() {
 
                       {currentUser && (
                         <div className="mt-3">
-                          {!imgState && (
+                          {!potholeImages[pothole._id] && (
                             <button
                               onClick={(e) => { e.stopPropagation(); fetchPotholeImage(pothole._id, pothole.contentType); }}
                               className="w-full bg-blue-500 text-white py-1 rounded hover:bg-blue-600 text-sm"
@@ -239,16 +308,18 @@ export default function MapPage() {
                               📸 Show Image
                             </button>
                           )}
-                          {imgState?.loading && (
+
+                          {potholeImages[pothole._id]?.loading && (
                             <div className="flex items-center justify-center gap-2 py-2 text-sm text-gray-500">
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
                               Loading image...
                             </div>
                           )}
-                          {imgState && !imgState.loading && imgState.src && (
+
+                          {potholeImages[pothole._id] && !potholeImages[pothole._id].loading && potholeImages[pothole._id].src && (
                             <div className="space-y-1 mt-1">
                               <img
-                                src={imgState.src}
+                                src={potholeImages[pothole._id].src}
                                 alt="Pothole"
                                 className="w-full h-32 object-cover rounded border"
                                 style={{ imageOrientation: 'from-image' }}
@@ -256,9 +327,10 @@ export default function MapPage() {
                               <p className="text-xs text-gray-400 text-center">Click outside to close</p>
                             </div>
                           )}
-                          {imgState && !imgState.loading && !imgState.src && (
+
+                          {potholeImages[pothole._id] && !potholeImages[pothole._id].loading && !potholeImages[pothole._id].src && (
                             <p className="text-sm text-red-500 mt-1">
-                              {imgState.error ? 'Failed to load image' : 'No image available'}
+                              {potholeImages[pothole._id].error ? 'Failed to load image' : 'No image available'}
                             </p>
                           )}
                         </div>

@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import api from "../utils/api";
 
-// Reusable binary → base64 converter (same as MapPage)
+// Convert binary to base64 for image display (browser-safe)
 const toImageSrc = (image, contentType = 'image/jpeg') => {
   if (!image) return null;
   if (typeof image === 'string') {
@@ -12,10 +12,38 @@ const toImageSrc = (image, contentType = 'image/jpeg') => {
   if (image?.type === 'Buffer' && Array.isArray(image.data)) {
     const bytes = new Uint8Array(image.data);
     let binary = '';
-    bytes.forEach(b => { binary += String.fromCharCode(b); });
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
     return `data:${contentType};base64,${btoa(binary)}`;
   }
   return null;
+};
+
+// Status config
+const STATUS_CONFIG = {
+  reported:     { label: 'Reported', color: 'blue', icon: '📝' },
+  under_review: { label: 'Under Review', color: 'yellow', icon: '🔍' },
+  in_progress:  { label: 'In Progress', color: 'orange', icon: '🚧' },
+  resolved:     { label: 'Resolved', color: 'green', icon: '✅' },
+  rejected:     { label: 'Rejected', color: 'red', icon: '❌' },
+};
+
+// Severity colors
+const SEVERITY_COLOR = {
+  'severe':     { label: 'SEVERE',     bg: 'bg-red-500',    border: 'border-red-600',    text: 'text-white' },
+  'non_severe': { label: 'NON SEVERE', bg: 'bg-orange-500', border: 'border-orange-600', text: 'text-white' },
+  'unknown':    { label: 'UNKNOWN',    bg: 'bg-gray-300',   border: 'border-gray-400',   text: 'text-gray-800' }
+};
+
+const getAIConfidenceColor = (confidence) => {
+  if (confidence > 0.8) return "bg-green-100 text-green-800";
+  if (confidence > 0.6) return "bg-yellow-100 text-yellow-800";
+  return "bg-orange-100 text-orange-800";
+};
+
+const getAIConfidenceText = (confidence) => {
+  if (confidence > 0.8) return "High Confidence";
+  if (confidence > 0.6) return "Medium Confidence";
+  return "Low Confidence";
 };
 
 export default function Status() {
@@ -23,6 +51,8 @@ export default function Status() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
+  // Same pattern as MapPage: keyed by pothole._id → { loading, src, error }
+  const [potholeImages, setPotholeImages] = useState({});
 
   useEffect(() => { fetchUserPotholes(); }, []);
 
@@ -31,7 +61,10 @@ export default function Status() {
       const token = localStorage.getItem("authToken");
       if (!token) { setError("Please log in to view your reports"); setLoading(false); return; }
       const response = await api.get("/potholes");
-      setPotholes(Array.isArray(response.data) ? response.data : []);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setPotholes(data);
+      // Pre-fetch images for all potholes immediately after loading list
+      data.forEach(p => fetchPotholeImage(p._id, p.contentType));
     } catch (err) {
       console.error("Error fetching potholes:", err);
       setError("Failed to load your pothole reports");
@@ -40,38 +73,23 @@ export default function Status() {
     }
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      reported:     "bg-blue-100 text-blue-800 border-blue-200",
-      under_review: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      in_progress:  "bg-orange-100 text-orange-800 border-orange-200",
-      resolved:     "bg-green-100 text-green-800 border-green-200",
-      rejected:     "bg-red-100 text-red-800 border-red-200",
-    };
-    return colors[status] || "bg-gray-100 text-gray-800 border-gray-200";
-  };
-
-  const getStatusText = (status) => {
-    const texts = {
-      reported:     "📝 Reported",
-      under_review: "🔍 Under Review",
-      in_progress:  "🚧 In Progress",
-      resolved:     "✅ Resolved",
-      rejected:     "❌ Rejected",
-    };
-    return texts[status] || status;
-  };
-
-  const getAIConfidenceColor = (confidence) => {
-    if (confidence > 0.8) return "bg-green-100 text-green-800";
-    if (confidence > 0.6) return "bg-yellow-100 text-yellow-800";
-    return "bg-red-100 text-red-800";
-  };
-
-  const getAIConfidenceText = (confidence) => {
-    if (confidence > 0.8) return "High Confidence";
-    if (confidence > 0.6) return "Medium Confidence";
-    return "Low Confidence";
+  // Exactly the same fetch logic as MapPage
+  const fetchPotholeImage = async (potholeId, contentType) => {
+    setPotholeImages(prev => {
+      if (prev[potholeId]?.src || prev[potholeId]?.loading) return prev; // already done / in-flight
+      return { ...prev, [potholeId]: { loading: true, src: null } };
+    });
+    try {
+      const response = await api.get(`/potholes/${potholeId}`);
+      const src = toImageSrc(
+        response.data.image,
+        contentType || response.data.contentType || 'image/jpeg'
+      );
+      setPotholeImages(prev => ({ ...prev, [potholeId]: { loading: false, src } }));
+    } catch (err) {
+      console.error("Error fetching pothole image:", err);
+      setPotholeImages(prev => ({ ...prev, [potholeId]: { loading: false, src: null, error: true } }));
+    }
   };
 
   const getStatusStats = () => ({
@@ -82,48 +100,30 @@ export default function Status() {
     rejected:     potholes.filter(p => p.status === 'rejected').length,
   });
 
-  const getImageSrc = (pothole) => {
-    // Try inline image binary first (same conversion as MapPage)
-    if (pothole.image) return toImageSrc(pothole.image, pothole.contentType);
-    if (pothole.imageUrl) return pothole.imageUrl;
-    if (pothole.imageId) return `${import.meta.env.VITE_API_URL}/potholes/${pothole._id}/image`;
-    return null;
+  const openImageModal = (pothole) => {
+    const imgState = potholeImages[pothole._id];
+    if (!imgState?.src) return;
+    setSelectedImage({
+      src: imgState.src,
+      location: `${pothole.latitude.toFixed(6)}, ${pothole.longitude.toFixed(6)}`,
+      reportedDate: pothole.reportedAt || pothole.createdAt,
+      resolvedDate: pothole.resolvedAt || null,
+      confidence: pothole.ai_confidence ?? null,
+      severity: pothole.severity || 'unknown'
+    });
   };
 
-  const viewImage = (pothole) => {
-    const src = getImageSrc(pothole);
-    if (src) {
-      setSelectedImage({
-        src,
-        location:   `${pothole.latitude.toFixed(6)}, ${pothole.longitude.toFixed(6)}`,
-        date:       new Date(pothole.createdAt).toLocaleDateString(),
-        confidence: pothole.ai_confidence ? `${(pothole.ai_confidence * 100).toFixed(1)}%` : 'N/A',
-      });
-    }
-  };
-
-  if (loading) {
-    return (
-      <motion.div className="p-6" initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.7 }}>
-        <div className="flex justify-center items-center h-32"><p>Loading your reports...</p></div>
-      </motion.div>
-    );
-  }
+  if (loading) return (
+    <motion.div className="p-6" initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.7 }}>
+      <div className="flex justify-center items-center h-32"><p>Loading your reports...</p></div>
+    </motion.div>
+  );
 
   const statusStats = getStatusStats();
 
-  // Status config — single source of truth used for both overview bar and cards
-  const STATUS_CONFIG = [
-    { key: 'reported',     color: 'blue',   label: 'Reported' },
-    { key: 'under_review', color: 'yellow', label: 'Under Review' },
-    { key: 'in_progress',  color: 'orange', label: 'In Progress' },
-    { key: 'resolved',     color: 'green',  label: 'Resolved' },
-    { key: 'rejected',     color: 'red',    label: 'Rejected' },
-  ];
-
   return (
     <motion.div className="p-6" initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.7 }}>
-      <h2 className="text-2xl font-bold mb-6">My Pothole Reports</h2>
+      <h2 className="text-2xl text-center font-bold mb-6">My Pothole Reports</h2>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
@@ -140,16 +140,13 @@ export default function Status() {
               <button onClick={() => setSelectedImage(null)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
             </div>
             <div className="p-4">
-              <img
-                src={selectedImage.src}
-                alt="Pothole"
-                className="w-full h-auto rounded-lg"
-                style={{ imageOrientation: 'from-image' }}
-              />
+              <img src={selectedImage.src} alt="Pothole" className="w-full h-auto rounded-lg" style={{ imageOrientation: 'from-image' }} />
               <div className="mt-4 space-y-2 text-sm text-gray-600">
                 <p><strong>Location:</strong> {selectedImage.location}</p>
-                <p><strong>Reported:</strong> {selectedImage.date}</p>
-                <p><strong>AI Confidence:</strong> {selectedImage.confidence}</p>
+                <p><strong>Reported:</strong> {new Date(selectedImage.reportedDate).toLocaleString()}</p>
+                {selectedImage.resolvedDate && <p><strong>Resolved:</strong> {new Date(selectedImage.resolvedDate).toLocaleString()}</p>}
+                <p><strong>Severity:</strong> {selectedImage.severity.toUpperCase()}</p>
+                <p><strong>AI Confidence:</strong> {selectedImage.confidence !== null ? `${(selectedImage.confidence * 100).toFixed(1)}%` : 'N/A'}</p>
               </div>
             </div>
             <div className="p-4 border-t flex justify-end">
@@ -167,15 +164,12 @@ export default function Status() {
       ) : (
         <div className="space-y-6">
 
-          {/* ── Status overview — matches MapPage style exactly ── */}
+          {/* Status overview */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <h3 className="font-semibold mb-3 text-lg">Report Status Overview</h3>
+            <h3 className="font-semibold text-center mb-3 text-lg">Report Status Overview</h3>
             <div className="flex flex-wrap justify-center gap-3 text-center">
-              {STATUS_CONFIG.map(({ key, color, label }) => (
-                <div
-                  key={key}
-                  className={`p-3 rounded-lg border-2 border-${color}-200 bg-${color}-50 flex-1 min-w-[120px] max-w-[200px]`}
-                >
+              {Object.entries(STATUS_CONFIG).map(([key, { label, color }]) => (
+                <div key={key} className={`p-3 rounded-lg border-2 border-${color}-200 bg-${color}-50 flex-1 min-w-[120px] max-w-[200px]`}>
                   <p className={`text-xl font-bold text-${color}-600`}>{statusStats[key]}</p>
                   <p className={`text-xs text-${color}-800`}>{label}</p>
                 </div>
@@ -183,111 +177,101 @@ export default function Status() {
             </div>
           </motion.div>
 
-          {/* ── Total count — matches MapPage style ── */}
+          {/* Total count */}
           <div className="text-center">
             <p className="text-2xl font-bold text-blue-600">{potholes.length}</p>
             <p className="text-gray-600">Total Reports</p>
           </div>
 
-          {/* ── Pothole cards ── */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Pothole cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr">
             {potholes.map((pothole) => {
-              const imgSrc = getImageSrc(pothole);
+              const imgState = potholeImages[pothole._id];
+              const severityKey = pothole.severity || 'unknown';
+              const severity = SEVERITY_COLOR[severityKey];
+
               return (
                 <motion.div
                   key={pothole._id}
-                  className="bg-white rounded-lg shadow-md p-4 border"
+                  className="bg-white rounded-lg shadow-md p-4 border flex flex-col justify-between h-full"
                   whileHover={{ scale: 1.02 }}
                   transition={{ type: "spring", stiffness: 300 }}
                 >
-                  {imgSrc && (
-                    <div className="mb-3 cursor-pointer" onClick={() => viewImage(pothole)}>
-                      <img
-                        src={imgSrc}
-                        alt="Pothole"
-                        className="w-full h-32 object-cover rounded-lg border hover:opacity-90 transition-opacity"
-                        style={{ imageOrientation: 'from-image' }}
-                      />
-                      <p className="text-xs text-gray-500 text-center mt-1">Click to view full image</p>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-start mb-3">
-                    <h3 className="font-semibold text-gray-800">Pothole Report</h3>
-                    <div className="flex flex-col items-end space-y-1">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(pothole.status)}`}>
-                        {getStatusText(pothole.status)}
+                  {/* Image area */}
+                  <div className="mb-3">
+                    {/* Loading spinner */}
+                    {imgState?.loading && (
+                      <div className="w-full h-32 flex items-center justify-center gap-2 bg-gray-50 rounded-lg border text-sm text-gray-500">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
+                        Loading image...
+                      </div>
+                    )}
+
+                    {/* Loaded image */}
+                    {imgState?.src && !imgState.loading && (
+                      <div className="cursor-pointer" onClick={() => openImageModal(pothole)}>
+                        <img
+                          src={imgState.src}
+                          alt="Pothole"
+                          className="w-full h-32 object-cover rounded-lg border hover:opacity-90 transition-opacity"
+                          style={{ imageOrientation: 'from-image' }}
+                        />
+                        <p className="text-xs text-gray-500 text-center mt-1">Click to view full image</p>
+                      </div>
+                    )}
+
+                    {/* Error / no image */}
+                    {imgState && !imgState.loading && !imgState.src && (
+                      <div className="w-full h-32 flex items-center justify-center bg-gray-50 rounded-lg border text-sm text-gray-400">
+                        {imgState.error ? '⚠️ Failed to load image' : 'No image available'}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-center mb-3">
+                    <h3 className="font-bold text-gray-800 pb-3">Pothole Report</h3>
+                    <div className="flex justify-between items-center">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${STATUS_CONFIG[pothole.status]?.color ? `bg-${STATUS_CONFIG[pothole.status].color}-100 text-${STATUS_CONFIG[pothole.status].color}-800 border-${STATUS_CONFIG[pothole.status].color}-200` : 'bg-gray-100 text-gray-800'}`}>
+                        {STATUS_CONFIG[pothole.status]?.icon} {STATUS_CONFIG[pothole.status]?.label}
                       </span>
-                      {pothole.ai_confidence && (
+                      <span className={`${severity.bg} ${severity.text} ${severity.border} px-2 py-1 rounded-full text-xs font-medium border`}>{severity.label}</span>
+                      {pothole.ai_confidence !== undefined && (
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getAIConfidenceColor(pothole.ai_confidence)}`}>
                           {getAIConfidenceText(pothole.ai_confidence)}
                         </span>
                       )}
                     </div>
                   </div>
+
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Location:</span>
-                      <span className="font-medium text-right">{pothole.latitude.toFixed(6)}<br />{pothole.longitude.toFixed(6)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">AI Confidence:</span>
-                      <span className="font-medium">{pothole.ai_confidence ? `${(pothole.ai_confidence * 100).toFixed(1)}%` : 'N/A'}</span>
+                      <span className="font-medium text-right">{pothole.latitude.toFixed(6)}, {pothole.longitude.toFixed(6)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Reported:</span>
-                      <span className="font-medium">{new Date(pothole.createdAt).toLocaleDateString()}</span>
+                      <span className="font-medium">{new Date(pothole.reportedAt || pothole.createdAt).toLocaleString()}</span>
                     </div>
                     {pothole.resolvedAt && (
                       <div className="flex justify-between">
                         <span className="text-gray-600">Resolved:</span>
-                        <span className="font-medium text-green-600">{new Date(pothole.resolvedAt).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                    {pothole.resolutionNotes && (
-                      <div className="mt-2 p-2 bg-gray-50 rounded border">
-                        <span className="text-gray-600 text-xs block mb-1">Admin Notes:</span>
-                        <span className="text-gray-800 text-sm">{pothole.resolutionNotes}</span>
+                        <span className="font-medium text-green-600">{new Date(pothole.resolvedAt).toLocaleString()}</span>
                       </div>
                     )}
                   </div>
+
                   <div className="mt-4 pt-3 border-t border-gray-200 flex space-x-2">
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(`${pothole.latitude}, ${pothole.longitude}`); alert('Coordinates copied!'); }}
-                      className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition text-sm"
-                    >
+                    <button onClick={() => { navigator.clipboard.writeText(`${pothole.latitude}, ${pothole.longitude}`); alert('Coordinates copied!'); }} className="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition text-sm">
                       Copy Coordinates
                     </button>
-                    <button
-                      onClick={() => window.open(`https://www.google.com/maps?q=${pothole.latitude},${pothole.longitude}`, '_blank')}
-                      className="flex-1 bg-green-500 text-white py-2 rounded hover:bg-green-600 transition text-sm"
-                    >
+                    <button onClick={() => window.open(`https://www.google.com/maps?q=${pothole.latitude},${pothole.longitude}`, '_blank')} className="flex-1 bg-green-500 text-white py-2 rounded hover:bg-green-600 transition text-sm">
                       View on Google Maps
                     </button>
                   </div>
-                  {imgSrc && (
-                    <button
-                      onClick={() => viewImage(pothole)}
-                      className="w-full mt-2 bg-purple-500 text-white py-2 rounded hover:bg-purple-600 transition text-sm"
-                    >
-                      📸 View Full Image
-                    </button>
-                  )}
                 </motion.div>
               );
             })}
           </div>
-
-          {/* ── Summary bar ── */}
-          <motion.div className="bg-gray-50 rounded-lg p-4 mt-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <h3 className="font-semibold mb-2">Summary</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div><p className="text-2xl font-bold text-blue-600">{potholes.length}</p><p className="text-sm text-gray-600">Total Reports</p></div>
-              <div><p className="text-2xl font-bold text-green-600">{potholes.filter(p => p.ai_verified).length}</p><p className="text-sm text-gray-600">AI Verified</p></div>
-              <div><p className="text-2xl font-bold text-yellow-600">{potholes.filter(p => p.ai_confidence > 0.8).length}</p><p className="text-sm text-gray-600">High Confidence</p></div>
-              <div><p className="text-2xl font-bold text-purple-600">{statusStats.resolved}</p><p className="text-sm text-gray-600">Resolved</p></div>
-            </div>
-          </motion.div>
-
         </div>
       )}
     </motion.div>
