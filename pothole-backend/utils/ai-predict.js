@@ -10,12 +10,12 @@ const tempDir = path.join(__dirname, '../temp');
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
 // --- RUN PREDICTION ---
-const runPrediction = (imageBuffer, mode) => {
+const runPrediction = (imageBuffer, mode, threshold=0.4) => {
     return new Promise((resolve, reject) => {
         const tempFilePath = path.join(tempDir, `temp_${Date.now()}_${mode}.jpg`);
         fs.writeFileSync(tempFilePath, imageBuffer);
 
-        const pythonProcess = spawn(pythonCommand, [scriptPath, tempFilePath, mode]);
+        const pythonProcess = spawn(pythonCommand, [scriptPath, tempFilePath, mode, threshold.toString()]);
         let result = '';
 
         pythonProcess.stdout.on('data', (data) => { result += data.toString(); });
@@ -55,7 +55,7 @@ const predictPothole = async (imageBuffer) => {
 
 const predictSeverity = async (imageBuffer) => {
     console.log('🔄 Running severity prediction...');
-    const output = await runPrediction(imageBuffer, 'severity');
+    const output = await runPrediction(imageBuffer, 'severity', 0.3);
     console.log(`✅ Severity: ${output.severity} (${(output.severity_confidence * 100).toFixed(1)}%)`);
     return output;
 };

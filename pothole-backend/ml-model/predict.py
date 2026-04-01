@@ -46,7 +46,7 @@ def predict_pothole(image_path):
     confidence = float(output[0][0][0])
     return confidence
 
-def predict_severity(image_path):
+def predict_severity(image_path, threshold=0.3):
     """
     Returns severity label ('non_severe' or 'severe') and confidence
     """
@@ -54,9 +54,16 @@ def predict_severity(image_path):
     outputs = severity_session.run(None, {severity_input_name: inp})
     logits = outputs[0][0]
     probs = softmax(logits)
-    classes = ['non_severe', 'severe']
-    pred_idx = int(np.argmax(probs))
-    return classes[pred_idx], float(np.max(probs))
+    non_severe_prob = float(probs[0])
+    severe_prob = float(probs[1])
+    if severe_prob >= threshold:
+        label = "severe"
+    else:
+        label = "non_severe"
+    return label, {
+        "severe": severe_prob,
+        "non_severe": non_severe_prob
+    }
 
 # ── MAIN ENTRY ─────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -64,13 +71,21 @@ if __name__ == "__main__":
         image_path = sys.argv[1]
         mode = sys.argv[2] if len(sys.argv) > 2 else 'detect'
 
+        # 👇 NEW: read threshold (default = 0.3)
+        threshold = float(sys.argv[3]) if len(sys.argv) > 3 else 0.3
+
         if mode == 'severity':
-            severity, conf = predict_severity(image_path)
-            print(json.dumps({"severity": severity, "severity_confidence": conf}))
+            severity, probs = predict_severity(image_path, threshold)
+            print(json.dumps({
+                "severity": severity,
+                "severity_confidence": probs["severe"] if severity == "severe" else probs["non_severe"],
+                "severe_prob": probs["severe"],
+                "non_severe_prob": probs["non_severe"],
+                "threshold": threshold
+            }))
         else:
             conf = predict_pothole(image_path)
-            print(json.dumps({"confidence": conf}))
-
+            print(json.dumps({"confidence": conf})) 
     except Exception as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         sys.exit(1)
